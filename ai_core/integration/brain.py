@@ -129,11 +129,20 @@ class AICoreBrain:
     SETTINGS_REFRESH_SECONDS = 30.0
 
     def __init__(self, store: AICoreStore, speak: Callable[[str], None] | None = None,
-                 clock: Callable[[], float] = time.time) -> None:
+                 clock: Callable[[], float] = time.time,
+                 speak_to: Callable[[str, str], None] | None = None) -> None:
+        """speak(text): local speaker (desktop app). speak_to(patient_id, text): per-patient (cloud backend)."""
         self.store = store
         self.speak = speak or (lambda text: None)
+        self.speak_to = speak_to
         self.clock = clock
         self.sessions: dict[str, _Session] = {}
+
+    def _say(self, patient_id: str, text: str) -> None:
+        if self.speak_to is not None:
+            self.speak_to(patient_id, text)
+        else:
+            self.speak(text)
 
     # ------------------------------------------------------------ sessions
 
@@ -259,7 +268,7 @@ class AICoreBrain:
             elif isinstance(e, ReminderChanged):
                 self.store.save_reminder(e.reminder, e.change)
                 if e.change in ("created", "redelivered") and e.reminder.audience == Audience.ELDER and not s.episode_active:
-                    self.speak(e.reminder.message)
+                    self._say(s.patient_id, e.reminder.message)
             elif isinstance(e, NightBedExit):
                 s.fall.note_night_bed_exit(e.ts)
 
@@ -273,7 +282,7 @@ class AICoreBrain:
                     s.checkin_event = None
             elif isinstance(e, CheckinRequested):
                 s.checkin_event = e.event_id
-                self.speak(e.prompt)
+                self._say(s.patient_id, e.prompt)
             elif isinstance(e, RiskSignalDetected):
                 self.store.add_signal(e.signal)
             elif isinstance(e, GaitBaselineUpdated):
@@ -353,11 +362,11 @@ class AICoreBrain:
         if speak_due:
             names = ", ".join(sorted({d["medication_name_snapshot"] for d in speak_due}))
             where = self._pillbox_hint(s, now)
-            self.speak(f"{h.capitalize()} ơi, đến giờ uống thuốc {names} rồi.{where}")
+            self._say(s.patient_id, f"{h.capitalize()} ơi, đến giờ uống thuốc {names} rồi.{where}")
         if speak_overdue:
             in_view = bool(s.last_seen and now - s.last_seen < 120)
             extra = "" if in_view else f" Uống xong {h} bấm nút Đã uống giúp cháu nhé."
-            self.speak(f"Đến giờ uống thuốc rồi, {h} chưa uống. {h.capitalize()} uống ngay giúp cháu nhé.{extra}")
+            self._say(s.patient_id, f"Đến giờ uống thuốc rồi, {h} chưa uống. {h.capitalize()} uống ngay giúp cháu nhé.{extra}")
 
     def _pillbox_hint(self, s: _Session, now: float) -> str:
         a = s.objects.answer("hộp thuốc", now)
@@ -378,11 +387,11 @@ class AICoreBrain:
                 ev = self.store.add_evidence(d["occurrence_id"], s.patient_id, obs)
                 confirmed |= self.store.confirm_dose_by_camera(d["occurrence_id"], s.patient_id, ev, obs.ts)
             if confirmed:
-                self.speak(f"Cháu đã ghi nhận {h} uống thuốc rồi ạ.")
+                self._say(s.patient_id, f"Cháu đã ghi nhận {h} uống thuốc rồi ạ.")
         else:
             for d in batch:
                 self.store.add_evidence(d["occurrence_id"], s.patient_id, obs)
-            self.speak(f"{h.capitalize()} vừa uống thuốc phải không ạ? Nếu đúng, {h} nói 'tôi đã uống thuốc rồi' "
+            self._say(s.patient_id, f"{h.capitalize()} vừa uống thuốc phải không ạ? Nếu đúng, {h} nói 'tôi đã uống thuốc rồi' "
                        f"hoặc bấm nút Đã uống nhé.")
 
     def _open_doses(self, s: _Session) -> list[dict]:

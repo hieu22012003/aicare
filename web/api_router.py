@@ -84,6 +84,10 @@ class ApiRouter:
             return 404, {"error": "Không tìm thấy chức năng"}
         elif method == "GET" and path == "/api/public/patients":
             return 404, {"error": "Không tìm thấy chức năng"}
+        elif path.startswith("/api/device/"):
+            # Home devices (camera box) authenticate with X-Device-Key, not a user session.
+            from ai_core.integration.device_api import handle_device_route
+            return handle_device_route(self.db, method, path, query_params, body, headers)
 
         # Authenticated routes
         session = self.auth.get_session(token) if token else None

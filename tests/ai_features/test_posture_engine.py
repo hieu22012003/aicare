@@ -201,8 +201,14 @@ def test_lying_outside_bed_zone_is_floor():
     assert eng.current_state(t + 29).location == Location.FLOOR
 
 
+def test_r4_needs_an_observed_day():
+    eng = make_engine()  # default: the camera must have seen 2 hours of the day
+    ev, t = stream(eng, at(16, 0, 5), 20, "sitting")
+    assert reminders(ev, RuleCode.R4_LOW_ACTIVITY) == []
+
+
 def test_r4_low_activity_resolves_with_exercise():
-    eng = make_engine()
+    eng = make_engine(activity_min_observed_minutes=0)
     ev, t = stream(eng, at(16, 0, 5), 20, "sitting")
     created = reminders(ev, RuleCode.R4_LOW_ACTIVITY)
     assert [e.change for e in created] == ["created"]

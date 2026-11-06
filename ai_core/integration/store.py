@@ -255,6 +255,27 @@ class AICoreStore:
         rows = self.db.fetchall("SELECT occurrence_id, actions_done FROM ai_medication_monitor WHERE patient_id=?", (patient_id,))
         return {r["occurrence_id"]: json.loads(r["actions_done"]) for r in rows}
 
+    # ------------------------------------------------------------ device commands (cloud backend)
+
+    def enqueue_speech(self, patient_id: str, text: str) -> None:
+        self.db.execute("INSERT INTO ai_device_commands(patient_id, kind, payload, created_at_utc) VALUES (?, 'speak', ?, ?)",
+                        (patient_id, json.dumps({"text": text}, ensure_ascii=False), datetime.now(UTC).isoformat()))
+
+    def commands_after(self, patient_id: str, after: int, limit: int = 50) -> list[dict]:
+        rows = self.db.fetchall("SELECT command_id, kind, payload, created_at_utc FROM ai_device_commands "
+                                "WHERE patient_id=? AND command_id>? ORDER BY command_id LIMIT ?", (patient_id, after, limit))
+        for r in rows:
+            r["payload"] = json.loads(r["payload"] or "{}")
+        return rows
+
+    def purge_commands(self, older_than_iso: str) -> None:
+        self.db.execute("DELETE FROM ai_device_commands WHERE created_at_utc<?", (older_than_iso,))
+
+    def patients_with_doses(self, start_iso: str, end_iso: str) -> list[str]:
+        rows = self.db.fetchall("SELECT DISTINCT patient_id FROM dose_occurrences WHERE scheduled_at_utc>=? AND scheduled_at_utc<? "
+                                "AND state NOT IN ('CANCELLED')", (start_iso, end_iso))
+        return [r["patient_id"] for r in rows]
+
     def patient_name(self, patient_id: str) -> str:
         row = self.db.fetchone("SELECT full_name FROM patients WHERE patient_id=?", (patient_id,))
         return row["full_name"] if row else patient_id

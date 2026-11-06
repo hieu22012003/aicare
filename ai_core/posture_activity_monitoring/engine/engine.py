@@ -624,8 +624,10 @@ class PostureEngine:
             day = local_date(now, self.tz)
             if day not in self._r4_done and now >= at_local_time(now, cfg.activity_check_time, self.tz):
                 self._r4_done.add(day)
-                active_minutes = int(self.day_summary(day, now).active_seconds // 60)
-                if active_minutes < cfg.activity_goal_minutes:
+                summary = self.day_summary(day, now)
+                active_minutes = int(summary.active_seconds // 60)
+                # A day the camera barely saw says nothing about activity: no reminder.
+                if summary.observed_seconds >= cfg.activity_min_observed_minutes * 60 and active_minutes < cfg.activity_goal_minutes:
                     events += self._create(
                         RuleCode.R4_LOW_ACTIVITY,
                         now,

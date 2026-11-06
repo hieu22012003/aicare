@@ -69,3 +69,32 @@ python -m pytest tests/ai_features -q
 ```
 
 Dữ liệu tư thế và khung xương đều tổng hợp. Ngưỡng là giá trị khởi điểm, cần đo trên dữ liệu thật trước khi tắt chế độ thử của chức năng 4.
+
+## Chạy làm backend trên đám mây (Render)
+
+```bash
+pip install -r requirements-backend.txt
+python -m backend.main
+```
+
+Backend gồm portal admin, người nhà và bác sĩ, REST API, SSE, lịch thuốc (OutboxRelay) và 4 chức năng AI. Không cần PyQt, camera hay MediaPipe trên server. Thiết bị tại nhà tự chạy MediaPipe rồi gửi kết quả lên, nên video không rời khỏi nhà.
+
+Deploy trên Render: Dashboard → **New → Blueprint** → chọn repo này. Render đọc `render.yaml` (web service Python 3.12, gói Starter, đĩa 1 GB ở `/var/data` để SQLite không mất khi deploy lại). Cần điền các biến:
+
+| Biến | Ý nghĩa |
+| --- | --- |
+| `AICARE_ADMIN_PASSWORD` | Mật khẩu tài khoản `admin`, ít nhất 12 ký tự. Bỏ trống thì backend tự sinh và in một lần ra log |
+| `AICARE_DEVICE_KEYS` | Khoá cho thiết bị: `khoa-dai-it-nhat-16-ky-tu:patient_id` (nhiều bệnh nhân ngăn bằng `\|`, `*` là tất cả) |
+| `EMAIL_USERNAME`, `EMAIL_PASSWORD` | Gmail và App Password để gửi email cảnh báo người nhà |
+
+API cho thiết bị (header `X-Device-Key`):
+
+| | Đường dẫn | Gửi gì |
+| --- | --- | --- |
+| POST | `/api/device/patients/{id}/observations` | `{"observations": [{"ts", "landmarks": 33×[x,y,z,visibility], "recognized"}]}` |
+| POST | `/api/device/patients/{id}/holistic` | Trong giờ uống thuốc: `{"frames": [{"ts", "face": 468×[x,y], "left_hand", "right_hand"}]}` (pixel) |
+| POST | `/api/device/patients/{id}/detections` | `{"frames": [{"ts", "detections": [{"label", "score", "box"}]}]}` |
+| POST | `/api/device/patients/{id}/voice` | `{"text": "kính của tôi đâu"}` → `{"reply": ...}` |
+| GET | `/api/device/patients/{id}/commands?after=<id>` | Câu cần đọc loa, và `monitoring.holistic` = có đang trong giờ uống thuốc không |
+
+Thiết bị hỏi `commands` vài giây một lần: đọc to các câu mới, và khi `monitoring.holistic = true` thì chuyển sang chạy Holistic, gửi lên `holistic`.

@@ -107,6 +107,10 @@ class DaySummary:
         return replace(self, seconds=dict(self.seconds))
 
     @property
+    def observed_seconds(self) -> float:
+        return sum(v for k, v in self.seconds.items() if k != "unobserved")
+
+    @property
     def active_seconds(self) -> float:
         """Walking + structured exercise: the 'Vận động' bucket used by R4."""
         return self.seconds.get("walking", 0.0) + self.exercise_seconds
@@ -184,6 +188,9 @@ class RulesConfig(BaseModel):
     lying_day_minutes: float = Field(90, ge=10, le=720)
     reposition_minutes: float = Field(120, ge=15, le=480)
     activity_goal_minutes: float = Field(30, ge=0, le=600)
+    activity_min_observed_minutes: float = Field(
+        120, ge=0, le=1440, description="R4 only judges a day the camera actually saw for this long"
+    )
     activity_check_time: time = time(16, 0)
     night_return_minutes: float = Field(20, ge=1, le=240)
     absence_hours: float = Field(3, ge=0.5, le=24)
