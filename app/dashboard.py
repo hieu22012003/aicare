@@ -219,6 +219,11 @@ class DashboardWindow(QMainWindow):
         # Start Camera capture engine
         self.camera_manager.start_camera()
 
+        # AI features (posture, fall risk, object finder, medication intake): background worker,
+        # fails safe and can be turned off with AI_CORE_ENABLED=0.
+        from ai_core.integration.app_hooks import start_ai_core
+        self.ai_core = start_ai_core(self)
+
         # Setup 1-second periodic timer for UI sync
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._on_timer_tick)
@@ -1268,6 +1273,10 @@ class DashboardWindow(QMainWindow):
         if getattr(self, "local_voice_controller", None):
             self.local_voice_controller.shutdown()
         self.timer.stop()
+        if getattr(self, "ai_core", None) is not None:
+            from ai_core.integration.app_hooks import stop_ai_core
+            stop_ai_core(self.ai_core)
+            self.ai_core = None
         if getattr(self, "medication_panel", None) is not None:
             self.medication_panel.shutdown()
         self.camera_manager.stop_camera()

@@ -65,6 +65,11 @@ class CommandDispatcher:
             return 'Lệnh này đã được xử lý.'
         if self.snapshot() != captured:
             return 'Ngữ cảnh đã đổi. Hãy chọn nút hoặc nói lại.'
+        from ai_core.integration.app_hooks import voice_reply
+        ai_reply = voice_reply((captured or {}).get('patient_id'), result.get('transcript', ''))
+        if ai_reply:
+            self.used.add(command_id)
+            return ai_reply
         if proposed is not None:
             from services.transcript_intent.policy import validate_proposal
             from services.transcript_intent.registry import REGISTRY

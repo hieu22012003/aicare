@@ -313,6 +313,7 @@
       <button class="tab-btn" onclick="switchTab('family-music')">🎵 Âm thanh & Bài hát</button>
       <button class="tab-btn" onclick="switchTab('rehab')">Phục hồi chức năng</button>
       <button class="tab-btn" onclick="switchTab('reports')">💬 Trò chuyện & Ghi nhận Bác sĩ</button>
+      <button class="tab-btn" onclick="switchTab('ai-monitor'); loadAiMonitor();">🤖 Giám sát AI</button>
     </div>
 
     <!-- 1. TỔNG QUAN & CHỈ SỐ SỨC KHỎE TAB (HỢP NHẤT) -->
@@ -825,6 +826,32 @@
       </div>
     </div>
 
+    <!-- AI monitoring (ai_core): posture, fall risk (trial), object finder, medication intake by camera -->
+    <div id="tab-ai-monitor" class="tab-content">
+      <div id="aiMedBanner" class="card" style="display:none; border-color: var(--warning, #d97706); background: #fff7ed;"></div>
+      <div class="card">
+        <div class="card-title">💊 Uống thuốc qua camera <span style="font-size:12px;font-weight:500;color:#64748b">24 giờ gần nhất</span></div>
+        <div id="aiMedList">Đang tải...</div>
+      </div>
+      <div class="card">
+        <div class="card-title">🧍 Tư thế & hoạt động</div>
+        <div id="aiPosture">Đang tải...</div>
+      </div>
+      <div class="card">
+        <div class="card-title">🚨 Phát hiện ngã, choáng <span id="aiFallMode" style="font-size:12px;font-weight:600"></span></div>
+        <div id="aiFall">Đang tải...</div>
+      </div>
+      <div class="card">
+        <div class="card-title">🔎 Tìm đồ vật</div>
+        <div style="display:flex; gap:8px; margin-bottom:10px;">
+          <input id="aiWhereInput" placeholder="Ví dụ: kính của bà ở đâu?" style="flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:8px;" onkeydown="if(event.key==='Enter') aiAskWhere()">
+          <button id="aiWhereBtn" class="btn-submit" onclick="aiAskWhere()" style="padding:6px 14px;">Hỏi</button>
+        </div>
+        <div id="aiWhereAnswer" style="margin-bottom:10px; font-weight:600;"></div>
+        <div id="aiObjects"></div>
+      </div>
+    </div>
+
   </div>
 
   <script>
@@ -907,6 +934,7 @@
     function handleRealtimeSignal(signal) {
       const type = signal.type;
       if (type && type.startsWith("voice.request_")) { loadVoiceRequests(); return; }
+      if (type && type.startsWith("ai.")) { handleAiSignal(signal); return; }
       if (type === "medication.dose_changed" || type === "medication.confirm" || type === "medication.alert_created" || type === "medication.alert_acknowledged" || type === "medication.dose_overdue") {
         if (type === "medication.alert_created" && signal.payload && signal.payload.alert_type === "HELP_REQUESTED") {
           alert("🆘 CẢNH BÁO KHẨN CẤP: Người cao tuổi vừa bấm nút 'CẦN HỖ TRỢ' khi uống thuốc! Vui lòng liên hệ người thân ngay!");
@@ -2653,6 +2681,91 @@
 
     window.onload = init;
   </script>
+
+  <script>
+    // ---- AI monitoring tab (ai_core) ----
+    const AI_POSTURE_VI = {STANDING: "Đứng", SITTING: "Ngồi", LYING: "Nằm", WALKING: "Đi lại", BENDING: "Cúi người", UNOBSERVED: "Không thấy trong khung hình"};
+    const AI_LOC_VI = {BED: "trên giường", CHAIR: "trên ghế", SOFA: "trên sofa", FLOOR: "dưới sàn", OTHER: "", UNKNOWN: ""};
+    const AI_FALL_VI = {CHECKING: "Đang hỏi lại", ESCALATED: "Đã báo người nhà", USER_OK: "Bác báo ổn", SELF_RECOVERED: "Tự đứng dậy", ACKNOWLEDGED: "Người nhà đã xem"};
+    const AI_STATE_VI = {PENDING: "Chờ uống", REMINDING: "Đang nhắc", SNOOZED: "Hoãn", CONFIRMED: "Đã uống", OVERDUE: "Quá hạn", MISSED: "Bỏ lỡ", SKIPPED: "Bỏ liều"};
+    const aiEsc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+    const aiTime = (iso) => iso ? new Date(iso).toLocaleString("vi-VN", {hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit"}) : "";
+    const aiMin = (sec) => Math.round((sec || 0) / 60);
+
+    function handleAiSignal(signal) {
+      const type = signal.type;
+      if (type === "ai.medication.not_taken") {
+        const b = document.getElementById("aiMedBanner");
+        b.style.display = "block";
+        b.innerHTML = `⚠️ <b>Đã quá giờ uống thuốc ${aiEsc(signal.payload && signal.payload.medication)}</b> mà camera chưa thấy bác uống. Loa đã nhắc bác.`;
+      }
+      if (type === "ai.fall.escalated" && signal.payload && !signal.payload.trial) {
+        alert("🚨 Nghi ngã: bác không phản hồi khi được hỏi. Vui lòng liên hệ ngay!");
+      }
+      if (type.startsWith("ai.medication.")) { loadMedication(); }
+      if (document.getElementById("tab-ai-monitor").classList.contains("active")) loadAiMonitor();
+    }
+
+    async function loadAiMonitor() {
+      if (!currentPatientId) return;
+      const data = await apiCall(`/api/patients/${currentPatientId}/ai`);
+      if (!data || data.error) {
+        document.getElementById("aiMedList").textContent = (data && data.error) || "Không tải được dữ liệu AI.";
+        return;
+      }
+      // Medication
+      const ev = {};
+      (data.medication.evidence || []).forEach((e) => { (ev[e.occurrence_id] = ev[e.occurrence_id] || []).push(e); });
+      const doses = data.medication.doses || [];
+      document.getElementById("aiMedList").innerHTML = doses.length ? doses.map((d) => {
+        const e = (ev[d.occurrence_id] || [])[0];
+        const cam = d.action_actor === "camera_verified" ? "📷 Camera ghi nhận" : (e ? (e.verdict === "LIKELY" ? "📷 Có thể đã uống, đang hỏi lại" : "📷 Camera thấy uống") : "");
+        const done = (() => { try { return JSON.parse(d.actions_done || "[]"); } catch (_) { return []; } })();
+        const late = done.includes("overdue") && d.state !== "CONFIRMED" ? " · ⚠️ đã nhắc quá giờ" : "";
+        return `<div style="padding:8px 0; border-bottom:1px solid var(--border)"><b>${aiEsc(d.medication)}</b> · ${aiTime(d.scheduled_at_utc)} · ${aiEsc(AI_STATE_VI[d.state] || d.state)} ${cam ? "· " + cam : ""}${late}</div>`;
+      }).join("") : "Chưa có liều thuốc nào trong 24 giờ qua.";
+      // Posture
+      const p = data.posture.current;
+      const sums = data.posture.last_24h_seconds || {};
+      const rem = (data.posture.reminders || []).slice(0, 3).map((r) => `<li>${aiTime(r.triggered_at_utc)} · ${aiEsc(r.caregiver_message || r.message)}</li>`).join("");
+      document.getElementById("aiPosture").innerHTML = p
+        ? `<div>Hiện tại: <b>${aiEsc(AI_POSTURE_VI[p.posture] || p.posture)} ${aiEsc(AI_LOC_VI[p.location] || "")}</b> từ ${aiTime(p.since_utc)}</div>
+           <div style="color:#64748b; margin-top:4px">24 giờ: ngồi ${aiMin(sums.SITTING)} phút · nằm ${aiMin(sums.LYING)} phút · đứng ${aiMin(sums.STANDING)} phút · đi lại ${aiMin(sums.WALKING)} phút</div>
+           ${rem ? `<ul style="margin:8px 0 0 18px">${rem}</ul>` : ""}`
+        : "Chưa có dữ liệu tư thế (camera chưa nhận diện được bác).";
+      // Fall
+      document.getElementById("aiFallMode").textContent = data.fall.trial ? "· Chế độ thử: chưa gửi cảnh báo" : "· Đang bật cảnh báo";
+      const events = data.fall.events || [];
+      const sig = (data.fall.signals || []).slice(0, 3).map((s) => `<li>${aiTime(s.observed_at_utc)} · ${aiEsc(s.message)}</li>`).join("");
+      document.getElementById("aiFall").innerHTML = (events.length ? events.map((e) => `
+        <div style="padding:8px 0; border-bottom:1px solid var(--border)">
+          <b>${aiTime(e.detected_at_utc)}</b> · ${aiEsc(e.caregiver_message || e.message)} · ${aiEsc(AI_FALL_VI[e.status] || e.status)}
+          <div style="margin-top:4px; font-size:13px">Đánh giá: ${["real_fall:Ngã thật", "near_fall:Suýt ngã", "false_alarm:Báo nhầm", "unsure:Không rõ"].map((x) => {
+            const [k, v] = x.split(":");
+            return `<button onclick="aiLabelFall('${aiEsc(e.event_id)}','${k}')" style="margin-right:4px; padding:2px 8px; border-radius:6px; border:1px solid var(--border); ${e.label === k ? "background:#dbeafe" : "background:#fff"}">${v}</button>`;
+          }).join("")}</div>
+        </div>`).join("") : "Chưa phát hiện sự kiện nào.") + (sig ? `<div style="margin-top:8px; color:#64748b">Dấu hiệu choáng gần đây:</div><ul style="margin:4px 0 0 18px">${sig}</ul>` : "");
+      // Objects
+      const st = {seen: "đang ở đó", holding: "có thể đang được cầm", gone: "đã rời chỗ"};
+      const objs = data.objects.sightings || [];
+      document.getElementById("aiObjects").innerHTML = objs.length ? `<div style="color:#64748b; margin-bottom:4px">Lần thấy gần nhất:</div>` + objs.slice(0, 10).map((o) =>
+        `<div><b>${aiEsc(o.name)}</b> · ${aiEsc(o.place)} · ${aiTime(o.last_seen_utc)} · ${aiEsc(st[o.status] || o.status)}</div>`).join("")
+        : "Chưa thấy đồ vật nào (cần cài model nhận diện đồ vật).";
+    }
+
+    async function aiAskWhere() {
+      const q = document.getElementById("aiWhereInput").value.trim();
+      if (!q || !currentPatientId) return;
+      const r = await apiCall(`/api/patients/${currentPatientId}/ai/objects/where?q=${encodeURIComponent(q)}`);
+      document.getElementById("aiWhereAnswer").textContent = r ? (r.text || r.error) : "";
+    }
+
+    async function aiLabelFall(eventId, label) {
+      await apiCall(`/api/patients/${currentPatientId}/ai/fall/${encodeURIComponent(eventId)}/label`, "POST", {label});
+      loadAiMonitor();
+    }
+  </script>
+
 </body>
 </html>
 

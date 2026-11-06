@@ -416,7 +416,7 @@ class TodayTodoWidget(QWidget):
 
             # Right: State / One-Touch Action Buttons
             if state == "CONFIRMED":
-                late_txt = " (Uống trễ)" if "late" in str(d.get("action_notes", "")).lower() or d.get("action_actor") == "confirmed_late" else " (Tự khai báo)"
+                late_txt = " (Camera ghi nhận)" if d.get("action_actor") == "camera_verified" else (" (Uống trễ)" if "late" in str(d.get("action_notes", "")).lower() or d.get("action_actor") == "confirmed_late" else " (Tự khai báo)")
                 status_lbl = QLabel(f"✅ ĐÃ UỐNG\n{late_txt}")
                 status_lbl.setAlignment(Qt.AlignCenter)
                 status_lbl.setStyleSheet("font-size: 15px; font-weight: 800; color: #35634D; background: #EEF3E9; padding: 8px 16px; border-radius: 8px;")

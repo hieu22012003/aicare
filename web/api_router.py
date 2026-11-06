@@ -145,6 +145,11 @@ class ApiRouter:
             if method == "GET" and sub_resource in ("overview", "observations", "prescriptions"):
                 self.auth.log_audit(user_id, "READ_RECORDS", "patient", patient_id, {"resource": sub_resource}, ip_address)
 
+            # AI monitoring (ai_core): posture, fall risk, objects, camera-observed medication intake.
+            if sub_resource == 'ai':
+                from ai_core.integration.web_routes import handle_ai_route
+                return handle_ai_route(self.db, self.auth, method, parts[4:], query_params, body, patient_id, user_id)
+
             # Voice requests reuse patient authorization and existing outbox SSE.
             if sub_resource == 'voice-requests':
                 from services.local_rules.requests import RequestService
