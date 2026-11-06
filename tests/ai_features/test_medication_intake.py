@@ -4,11 +4,13 @@ from features.medication.intake_monitoring.detector import (
     CHIN, FACE_LEFT, FACE_RIGHT, FOREHEAD, INDEX_MCP, INDEX_TIP, LIP_LOWER_INNER, LIP_UPPER_INNER,
     MOUTH_LEFT, MOUTH_RIGHT, NOSE_TIP, PINKY_MCP, THUMB_TIP, IntakeDetector,
 )
-from features.medication.intake_monitoring.domain import Hand, HolisticFrame, IntakeConfig, IntakeVerdict
+from features.medication.intake_monitoring.domain import Fingers, Hand, HolisticFrame, IntakeConfig, IntakeVerdict
 from features.medication.intake_monitoring.policy import DoseAction, MonitorPolicy, due_actions, skipped_speech
 
 MOUTH = (320.0, 200.0)
 FPS = 10
+# Strict mode: any hand, any fingertip, gesture alone is only LIKELY (needs a drink or pill context).
+STRICT = IntakeConfig(hand=Hand.ANY, fingers=Fingers.ANY, gesture_counts_as_taken=False)
 
 
 def face(open_mouth=False, tilt=False):
@@ -62,7 +64,7 @@ def take_pill(t, open_mouth=True, contact=1.0, **kw):
 
 
 def test_gesture_then_cup_is_verified():
-    det = IntakeDetector()
+    det = IntakeDetector(STRICT)
     fs, t = take_pill(0.0)
     assert run(det, fs) == []  # waiting for the drink
     out = run(det, [frame(t + 5, cup_near_mouth=True)])
@@ -70,7 +72,7 @@ def test_gesture_then_cup_is_verified():
 
 
 def test_gesture_alone_becomes_likely_after_drink_window():
-    det = IntakeDetector()
+    det = IntakeDetector(STRICT)
     fs, t = take_pill(0.0)
     run(det, fs)
     out = run(det, frames(t, 61)[0])
@@ -78,14 +80,14 @@ def test_gesture_alone_becomes_likely_after_drink_window():
 
 
 def test_pill_context_verifies_without_drink():
-    det = IntakeDetector()
+    det = IntakeDetector(STRICT)
     fs, t = take_pill(0.0, near_pillbox=True)
     out = run(det, fs)
     assert [o.verdict for o in out] == [IntakeVerdict.VERIFIED] and out[0].steps["drink_evidence"] == "pill_context"
 
 
 def test_second_contact_with_head_tilt_counts_as_drinking():
-    det = IntakeDetector()
+    det = IntakeDetector(STRICT)
     fs, t = take_pill(0.0)
     run(det, fs)
     glass, t = frames(t, 1.0, at=MOUTH, tilt=True)
@@ -95,7 +97,7 @@ def test_second_contact_with_head_tilt_counts_as_drinking():
 
 def test_mouth_closed_or_too_long_or_phone_is_not_intake():
     for kw in ({"open_mouth": False}, {"contact": 7.0}, {"phone_in_hand": True}):
-        det = IntakeDetector()
+        det = IntakeDetector(STRICT)
         contact = kw.pop("contact", 1.0)
         fs, t = take_pill(0.0, contact=contact, **kw)
         out = run(det, fs + frames(t, 70)[0])
@@ -103,7 +105,7 @@ def test_mouth_closed_or_too_long_or_phone_is_not_intake():
 
 
 def test_mouth_opening_just_after_the_hand_leaves_still_counts():
-    det = IntakeDetector()
+    det = IntakeDetector(STRICT)
     fs, t = frames(0.0, 1.0)
     at, t = frames(t, 0.6, at=MOUTH)
     after, t = frames(t, 0.5, open_mouth=True)
@@ -115,7 +117,7 @@ def test_hand_setting_and_identity():
     det = IntakeDetector(IntakeConfig(hand=Hand.RIGHT))
     fs, t = take_pill(0.0, which="left", near_pillbox=True)
     assert run(det, fs + frames(t, 70)[0]) == []
-    det = IntakeDetector()
+    det = IntakeDetector(STRICT)
     fs, t = take_pill(0.0, near_pillbox=True, identity_ok=False)
     assert run(det, fs) == []
 
@@ -132,3 +134,33 @@ def test_policy_milestones_and_restart():
     assert skipped_speech(p, t0, t0 + 2400, set()) == [DoseAction.SPEAK_DUE]
     assert due_actions(p, t0, t0 + 4000, set(), False) == [DoseAction.CLOSE]
     assert due_actions(p, t0, t0 + 1, {DoseAction.OPEN}, True) == [DoseAction.CLOSE]
+
+
+# ---------------------------------------------------------------- default rule (right hand, thumb + index, mouth open)
+
+
+def test_default_right_hand_two_fingers_and_open_mouth_is_taken():
+    det = IntakeDetector()
+    fs, _ = take_pill(0.0)
+    out = run(det, fs)
+    assert [o.verdict for o in out] == [IntakeVerdict.VERIFIED]
+    assert out[0].hand == "right" and out[0].steps["drink_evidence"] == "gesture"
+
+
+def test_default_ignores_left_hand_closed_mouth_and_single_finger():
+    det = IntakeDetector()
+    fs, t = take_pill(0.0, which="left")
+    assert run(det, fs + frames(t, 70)[0]) == []
+    det = IntakeDetector()
+    fs, t = take_pill(0.0, open_mouth=False)
+    assert run(det, fs + frames(t, 70)[0]) == []
+    # thumb at the mouth but the index finger spread far away (70 px > half the 120 px face width)
+    det = IntakeDetector()
+    lone = [HolisticFrame(f.ts, f.face, None, _spread(f.right_hand)) for f in take_pill(0.0)[0]]
+    assert run(det, lone) == []
+
+
+def _spread(h):
+    pts = list(h)
+    pts[INDEX_TIP] = (pts[THUMB_TIP][0] + 70, pts[THUMB_TIP][1])
+    return tuple(pts)

@@ -16,6 +16,11 @@ class Hand(str, Enum):
     LEFT = "left"
 
 
+class Fingers(str, Enum):
+    THUMB_INDEX = "thumb_index"  # thumb tip AND index tip both at the mouth (holding a pill)
+    ANY = "any"  # any one of the two fingertips at the mouth
+
+
 class IntakeVerdict(str, Enum):
     VERIFIED = "VERIFIED"  # gesture + drinking or pill-handling context: dose counted as taken
     LIKELY = "LIKELY"  # gesture only: the elder is asked to confirm, nothing is recorded as taken
@@ -24,7 +29,10 @@ class IntakeVerdict(str, Enum):
 class IntakeConfig(BaseModel):
     """Starting thresholds. Tune with labelled sessions before turning trial mode off."""
 
-    hand: Hand = Hand.ANY
+    hand: Hand = Field(Hand.RIGHT, description="which hand brings the pill to the mouth")
+    fingers: Fingers = Field(Fingers.THUMB_INDEX, description="thumb + index both at the mouth, or any fingertip")
+    gesture_counts_as_taken: bool = Field(
+        True, description="two fingers at the mouth + mouth open = taken (VERIFIED) without waiting for a drink")
     pinch_ratio: float = Field(0.25, gt=0, le=1, description="thumb-index tip gap / hand width")
     pinch_recent_seconds: float = Field(3.0, gt=0, le=30)
     mouth_distance_ratio: float = Field(0.5, gt=0, le=2, description="fingertip-mouth gap / face width")

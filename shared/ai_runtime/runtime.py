@@ -5,6 +5,8 @@
 * Pose model normally; Holistic (pose + face + hands) only while a medication window is open.
 * Optional ONNX object detector every few seconds (env AI_CORE_DETECTOR_MODEL).
 * Timers tick once a second even when nobody is in view (medication reminders).
+* When a medication window opens (5 minutes before the dose) the camera is switched on through
+  ``wake_camera`` so intake can be watched even if the camera had been stopped.
 Runs on its own daemon thread; the Qt UI thread is never blocked. Enable/disable with
 AI_CORE_ENABLED (default on; off in AI_CARE_TEST_MODE unless explicitly enabled).
 """
@@ -48,6 +50,7 @@ class AICoreRuntime:
         patient_provider: PatientProvider,
         speak: Callable[[str], None],
         fps: float = 8.0,
+        wake_camera: Callable[[], None] | None = None,
         detector_model: str | None = None,
         detector_interval: float = 3.0,
         clock: Callable[[], float] = time.time,
@@ -60,6 +63,8 @@ class AICoreRuntime:
         self.detector_model = detector_model if detector_model is not None else os.getenv("AI_CORE_DETECTOR_MODEL") or None
         self.detector_interval = detector_interval
         self.clock = clock
+        self.wake_camera = wake_camera
+        self._woken_for_window = False
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()  # brain access: worker thread vs voice/UI calls
@@ -114,6 +119,21 @@ class AICoreRuntime:
             self._last_tick = now
             with self._lock:
                 self.brain.tick(now, home_patient=pid)
+                active = bool(pid) and self.brain.medication_active(pid)
+            self._camera_for_medication(active)
+
+    def _camera_for_medication(self, active: bool) -> None:
+        """A medication window just opened: make sure the camera runs, even if someone stopped it."""
+        if active and not self._woken_for_window:
+            self._woken_for_window = True
+            log.info("Medication window open: switching the camera on for intake monitoring")
+            if self.wake_camera is not None:
+                try:
+                    self.wake_camera()
+                except Exception:
+                    log.exception("Could not switch the camera on")
+        elif not active:
+            self._woken_for_window = False
 
     def _process(self, pid: str, frame, now: float) -> None:
         h, w = frame.shape[:2]

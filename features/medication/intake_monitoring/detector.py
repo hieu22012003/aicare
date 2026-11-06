@@ -2,11 +2,14 @@
 
 One intake = a sequence, not a frame:
   (optional) pinch: thumb and index tips together (holding a pill)
-  contact: a fingertip near the mouth for >= hold_seconds (rejected if it lasts > 5 s: phone, chin rest)
+  contact: the configured hand (default RIGHT) brings its fingertips to the mouth for >= hold_seconds;
+           by default BOTH the thumb tip and the index tip must be at the mouth (rejected if it lasts > 5 s:
+           phone, chin rest)
   mouth open: during the contact or within open_slack_seconds after it
   drink (booster): a cup at the mouth, or a second contact with the head tilted back, within 60 s
-Verdict: VERIFIED when contact + mouth open + (drink, or pinch and pill-place context); otherwise
-LIKELY, reported when the drink window ends. LIKELY never counts as taken on its own.
+Verdict (default, gesture_counts_as_taken): contact + mouth open is VERIFIED straight away.
+Strict mode (gesture_counts_as_taken=False): VERIFIED needs a drink or pinch + pill-place context too;
+otherwise LIKELY, reported when the drink window ends. LIKELY never counts as taken on its own.
 
 Pure and deterministic: time comes from the frames.
 """
@@ -17,6 +20,7 @@ import math
 from collections import deque
 
 from features.medication.intake_monitoring.domain import (
+    Fingers,
     Hand,
     HolisticFrame,
     IntakeConfig,
@@ -61,10 +65,13 @@ def pinch_ratio(hand) -> float:
     return _d(hand[THUMB_TIP], hand[INDEX_TIP]) / width if width > 0 else 9.9
 
 
-def mouth_gap(hand, face) -> float:
+def mouth_gap(hand, face, fingers: Fingers = Fingers.ANY) -> float:
+    """Fingertip-to-mouth distance / face width. THUMB_INDEX: the farther of the two tips must be close."""
     m = mouth_center(face)
     fw = face_width(face)
-    return min(_d(hand[THUMB_TIP], m), _d(hand[INDEX_TIP], m)) / fw if fw > 0 else 9.9
+    gaps = (_d(hand[THUMB_TIP], m), _d(hand[INDEX_TIP], m))
+    gap = max(gaps) if fingers == Fingers.THUMB_INDEX else min(gaps)
+    return gap / fw if fw > 0 else 9.9
 
 
 class IntakeDetector:
@@ -114,7 +121,7 @@ class IntakeDetector:
         for name, pts in self._hands(f):
             if pinch_ratio(pts) <= cfg.pinch_ratio:
                 self._pinch_at = f.ts
-            gap = mouth_gap(pts, f.face)
+            gap = mouth_gap(pts, f.face, cfg.fingers)
             if gap < best_gap:
                 best_hand, best_gap = name, gap
         near = best_hand is not None and best_gap <= cfg.mouth_distance_ratio
@@ -174,6 +181,10 @@ class IntakeDetector:
         if pinch is not None and ctx is not None:
             obs.verdict = IntakeVerdict.VERIFIED
             obs.score, obs.steps = self._score(obs), self._steps(obs, "pill_context")
+            return [obs]
+        if cfg.gesture_counts_as_taken:
+            obs.verdict = IntakeVerdict.VERIFIED
+            obs.score, obs.steps = self._score(obs), self._steps(obs, "gesture")
             return [obs]
         self._candidate = obs
         return []

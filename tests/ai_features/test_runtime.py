@@ -72,3 +72,42 @@ def test_medication_window_switches_to_holistic():
 
 def test_voice_reply_without_runtime_is_none():
     assert voice_reply(PID, "kính của tôi đâu") is None
+
+
+def test_medication_window_switches_the_camera_on():
+    from datetime import datetime, timedelta, timezone
+
+    import numpy as np
+
+    from shared.ai_runtime.runtime import AICoreRuntime
+    from shared.database.connection import UnifiedDatabaseManager
+    from shared.database.migrator import Migrator
+
+    utc = timezone.utc
+    t0 = datetime(2026, 11, 7, 3, 0, tzinfo=utc).timestamp()
+    db = UnifiedDatabaseManager(":memory:")
+    Migrator(db).apply_all()
+    db.execute("INSERT INTO patients(patient_id, full_name) VALUES ('pat_w', 'Cụ W')")
+    due = datetime.fromtimestamp(t0, utc)
+    db.execute(
+        "INSERT INTO dose_occurrences (occurrence_id, schedule_id, revision, scheduled_at_utc, local_scheduled_time, "
+        "grace_deadline_utc, state, medication_name_snapshot, dose_snapshot, instructions_snapshot, patient_id) "
+        "VALUES ('occ_w', 'sch_w', 1, ?, ?, ?, 'PENDING', 'Aspirin', '1 viên', '', 'pat_w')",
+        (due.isoformat(), due.replace(tzinfo=None).isoformat(), (due + timedelta(hours=1)).isoformat()))
+
+    class StoppedCamera:  # camera off: no frames at all
+        def get_capture_packet(self):
+            return None, None, False
+
+    clock = {"now": t0 - 600}
+    wakes = []
+    rt = AICoreRuntime(db, StoppedCamera(), lambda: ("pat_w", False), lambda s: None,
+                       wake_camera=lambda: wakes.append(clock["now"]), clock=lambda: clock["now"])
+    rt.step()
+    assert wakes == []
+    clock["now"] = t0 - 240  # 4 minutes before: window open
+    rt.step()
+    clock["now"] += 2
+    rt.step()
+    assert wakes == [t0 - 240]  # once per window
+    assert np is not None
