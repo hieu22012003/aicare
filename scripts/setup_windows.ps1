@@ -164,7 +164,7 @@ try {
         Write-Host "Không tìm thấy Python 3.11 hoặc 3.12 64-bit phù hợp. Đang tự động tải và cài đặt Python 3.12.10 riêng biệt..."
         $installScript = Join-Path $ScriptDir 'install_python.ps1'
         if (-not (Test-Path -LiteralPath $installScript)) {
-            $installScript = Join-Path $ProjectRoot 'packaging\portable\install_python.ps1'
+            $installScript = Join-Path $ProjectRoot 'deploy\windows\packaging\portable\install_python.ps1'
         }
         if (Test-Path -LiteralPath $installScript) {
             & $installScript
@@ -199,7 +199,7 @@ try {
     Write-Success "Toàn bộ thư viện đã được cài đặt thành công."
 
     Write-Step "[BƯỚC 4/6] KHỞI TẠO CẤU HÌNH & TẢI MÔ HÌNH AI"
-    & $venvPython (Join-Path $ProjectRoot 'config\config_generator.py')
+    & $venvPython (Join-Path $ProjectRoot 'shared\config_generator.py')
     if ($LASTEXITCODE -ne 0) { throw "Khởi tạo tệp cấu hình thất bại." }
 
     if (-not $SkipModelDownload) {
@@ -208,7 +208,7 @@ try {
         if ($CoreOnly) { $downloadArgs += '--core-only' }
         & $venvPython @downloadArgs
         if ($LASTEXITCODE -ne 0) {
-            throw "Một số mô hình chưa tải xong. Xem runtime\logs\model_download.log; chạy lại Setup.cmd để hoàn tất."
+            throw "Một số mô hình chưa tải xong. Xem runtime\logs\model_download.log; chạy lại deploy/windows/Setup.cmd để hoàn tất."
         } else {
             Write-Success "Toàn bộ mô hình AI đã sẵn sàng và được xác minh nguyên vẹn."
         }
@@ -223,7 +223,7 @@ try {
     Write-Success "Cơ sở dữ liệu 3NF và tài khoản Quản trị viên (admin / admin123) đã sẵn sàng."
 
     Write-Step "[BƯỚC 6/6] KIỂM TRA CHẨN ĐOÁN TOÀN DIỆN HỆ THỐNG"
-    & $venvPython (Join-Path $ProjectRoot 'CHECK_SYSTEM.py')
+    & $venvPython (Join-Path $ProjectRoot 'scripts/check_system.py')
     if ($LASTEXITCODE -ne 0) { throw 'Kiểm tra hệ thống thất bại; chưa đánh dấu thiết lập hoàn tất.' }
     
     $marker = Join-Path $ProjectRoot 'runtime\.setup-complete'
@@ -233,7 +233,7 @@ try {
     Write-Host " 🎉 THIẾT LẬP THÀNH CÔNG! BẢN DEMO ĐÃ SẴN SÀNG." -ForegroundColor Green
     Write-Host "==================================================================" -ForegroundColor Green
     Write-Host "👉 Bây giờ bạn có thể khởi động hệ thống bằng lệnh:" -ForegroundColor Yellow
-    Write-Host "   Start Demo.cmd`n" -ForegroundColor Yellow
+    Write-Host "   deploy/windows/Start Demo.cmd`n" -ForegroundColor Yellow
 
 } catch {
     Write-Err "QUÁ TRÌNH THIẾT LẬP GẶP LỖI:"

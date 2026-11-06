@@ -22,14 +22,14 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from database.importer import DataImporter
-from web.auth import AuthService
-from web.api_router import ApiRouter
-from web.sse_hub import sse_hub
-from services.outbox_relay import OutboxRelayService
-from services.elder_sync_client import ElderSyncClient
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from shared.database.importer import DataImporter
+from features.web_portal.auth import AuthService
+from features.web_portal.api_router import ApiRouter
+from features.web_portal.sse_hub import sse_hub
+from shared.services.outbox_relay import OutboxRelayService
+from shared.services.elder_sync_client import ElderSyncClient
 
 UTC = timezone.utc
 

@@ -22,7 +22,7 @@ if (-not (Test-Path -LiteralPath '.cache/hfd-py39/Scripts/python.exe')) {
 
 if ($LASTEXITCODE -ne 0) { throw 'Worker dependencies failed' }
 
-$taskModels = Join-Path $taskRoot 'modules/fall/models'
+$taskModels = Join-Path $taskRoot 'features/fall_risk/hfd_model/models'
 
 New-Item -ItemType Directory -Force -Path $taskModels | Out-Null
 

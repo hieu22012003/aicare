@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
-out = Path('reports/fall_detection/input_inspection')
+out = Path('docs/test-reports/fall_detection/input_inspection')
 out.mkdir(parents=True, exist_ok=True)
 files = [Path(r'C:\Users\USER\Downloads\Elderly Couple Slips and Falls Outside Front Door - 1498633 - RM Videos (720p, h264).mp4'), Path('Test_Fall.mp4'), Path('TestUI.mp4')]
 items = []

@@ -7,11 +7,11 @@ for elderly patient nguyen van a (patient_001).
 import json
 from datetime import datetime, timezone
 import pytest
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from database.importer import DataImporter
-from web.auth import AuthService
-from web.api_router import ApiRouter
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from shared.database.importer import DataImporter
+from features.web_portal.auth import AuthService
+from features.web_portal.api_router import ApiRouter
 
 
 @pytest.fixture

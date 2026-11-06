@@ -8,8 +8,8 @@ from __future__ import annotations
 import sys
 import unittest
 
-import config
-from app.launcher import ModuleLauncher
+from shared import config
+from apps.desktop.launcher import ModuleLauncher
 
 
 class TestModuleLauncher(unittest.TestCase):

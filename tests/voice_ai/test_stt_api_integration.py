@@ -20,26 +20,26 @@ import pytest
 from PyQt5.QtCore import QCoreApplication
 from PyQt5.QtWidgets import QApplication
 
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from services.voice_ai.domain.contracts import ExecutionStatus, IntentType, VoiceIntent
-from services.voice_ai.orchestrator.router import WorkflowOrchestrator
-from services.voice_ai.safety.assistance_rules import DeterministicSafetyDetector
-from services.voice_ai.stt.contracts import (
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from features.voice_assistant.voice_ai.domain.contracts import ExecutionStatus, IntentType, VoiceIntent
+from features.voice_assistant.voice_ai.orchestrator.router import WorkflowOrchestrator
+from features.voice_assistant.voice_ai.safety.assistance_rules import DeterministicSafetyDetector
+from features.voice_assistant.voice_ai.stt.contracts import (
     BusinessCommand,
     SttErrorCode,
     SttRequest,
     SttResponse,
     SttSessionState,
 )
-from services.voice_ai.stt.controller import VoiceSessionController
-from services.voice_ai.stt.gateway import BackendSttGateway
-from services.voice_ai.stt.provider_adapter import (
+from features.voice_assistant.voice_ai.stt.controller import VoiceSessionController
+from features.voice_assistant.voice_ai.stt.gateway import BackendSttGateway
+from features.voice_assistant.voice_ai.stt.provider_adapter import (
     GenericHttpSTTProviderAdapter,
     MockSTTProviderAdapter,
 )
-from web.api_router import ApiRouter
-from web.auth import AuthService
+from features.web_portal.api_router import ApiRouter
+from features.web_portal.auth import AuthService
 
 
 # Headless Qt App Fixture
@@ -192,7 +192,7 @@ class TestVoiceSessionController:
     def test_controller_normal_flow(self, qapp):
         mock_adapter = MockSTTProviderAdapter(default_text="Bác sĩ ơi tôi mệt")
         gateway = BackendSttGateway(provider_adapter=mock_adapter)
-        from services.voice_ai.stt.client import SttClient
+        from features.voice_assistant.voice_ai.stt.client import SttClient
         client = SttClient(direct_gateway=gateway)
 
         ctrl = VoiceSessionController(stt_client=client)
@@ -224,7 +224,7 @@ class TestVoiceSessionController:
         """Cancelling during transcribing must discard any late arriving response."""
         mock_adapter = MockSTTProviderAdapter(default_text="Câu nói muộn")
         gateway = BackendSttGateway(provider_adapter=mock_adapter)
-        from services.voice_ai.stt.client import SttClient
+        from features.voice_assistant.voice_ai.stt.client import SttClient
         client = SttClient(direct_gateway=gateway)
 
         ctrl = VoiceSessionController(stt_client=client)

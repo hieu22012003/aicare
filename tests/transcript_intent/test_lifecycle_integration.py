@@ -8,15 +8,15 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import pytest
 from tests.voice_ai.test_local_voice import care_db, qapp, wait_for
-from services.transcript_intent.backend import TranscriptIntentEndpoint
-from services.transcript_intent.context import read_state, version
-from services.transcript_intent.coordinator import VoiceRequestCoordinator
-from services.transcript_intent.config import BackendConfig
-from services.transcript_intent.budget import RoutingUnavailable, ProjectBudget
-from services.transcript_intent.registry import Intent
-from services.transcript_intent.schema import Decision, IntentRequest, proposal
-from services.transcript_intent.service import GeminiIntentService
-from services.local_voice.dispatcher import CommandDispatcher
+from features.voice_assistant.transcript_intent.backend import TranscriptIntentEndpoint
+from features.voice_assistant.transcript_intent.context import read_state, version
+from features.voice_assistant.transcript_intent.coordinator import VoiceRequestCoordinator
+from features.voice_assistant.transcript_intent.config import BackendConfig
+from features.voice_assistant.transcript_intent.budget import RoutingUnavailable, ProjectBudget
+from features.voice_assistant.transcript_intent.registry import Intent
+from features.voice_assistant.transcript_intent.schema import Decision, IntentRequest, proposal
+from features.voice_assistant.transcript_intent.service import GeminiIntentService
+from features.voice_assistant.local_voice.dispatcher import CommandDispatcher
 
 TEXT = 'Cho tôi quay về màn hình ban đầu'
 
@@ -182,7 +182,7 @@ def test_authenticated_classification_is_read_only(care_db):
     assert code == 200 and response['proposal']['intent'] == Intent.HOME
     assert before == read_state(db, 'patient_001')
     assert auth.check_patient_access.call_count == 2
-    from web.api_router import ApiRouter
+    from features.web_portal.api_router import ApiRouter
     router = ApiRouter(db, auth)
     router.transcript_intent_endpoint = endpoint
     auth.get_session.return_value = None
@@ -214,7 +214,7 @@ def test_proposed_medication_confirmation_same_db_and_web(care_db, qapp):
     with db.connect() as conn:
         assert conn.fetchone("SELECT COUNT(*) n FROM dose_events WHERE idempotency_key='voice_intent_integration'")['n'] == 1
         assert conn.fetchone("SELECT COUNT(*) n FROM outbox_events WHERE source='voice'")['n'] == 1
-    from web.api_router import ApiRouter
+    from features.web_portal.api_router import ApiRouter
     router = ApiRouter(db, auth_mock())
     code, body = router._get_medication_doses('patient_001', {'date': dose['local_scheduled_time'][:10]})
     assert code == 200
@@ -232,7 +232,7 @@ def test_model_proposal_does_not_override_negation_or_camera(text, intent):
 
 
 def test_sdk_contract_and_no_implicit_tools():
-    from services.transcript_intent.gemini_adapter import GeminiIntentAdapter
+    from features.voice_assistant.transcript_intent.gemini_adapter import GeminiIntentAdapter
     client = MagicMock()
     aio = Mock()
     response = SimpleNamespace(candidates=[SimpleNamespace(finish_reason=SimpleNamespace(value='STOP'))],
@@ -252,7 +252,7 @@ def test_sdk_contract_and_no_implicit_tools():
 
 
 def test_sdk_async_timeout_cancels_pending_request():
-    from services.transcript_intent.gemini_adapter import GeminiIntentAdapter
+    from features.voice_assistant.transcript_intent.gemini_adapter import GeminiIntentAdapter
     from unittest.mock import MagicMock
     cancelled = []
     async def slow(**_):
@@ -298,7 +298,7 @@ def test_process_local_lock_and_offline_clear_commands(tmp_path):
     ('STOP', '{"intent":"complete_rehabilitation"}', 'invalid_response_or_transport'),
 ])
 def test_sdk_blocked_truncated_and_invalid_json(finish, text, error):
-    from services.transcript_intent.gemini_adapter import GeminiIntentAdapter
+    from features.voice_assistant.transcript_intent.gemini_adapter import GeminiIntentAdapter
     client, aio = MagicMock(), Mock()
     response = SimpleNamespace(candidates=[SimpleNamespace(finish_reason=SimpleNamespace(value=finish))], text=text)
     aio.models.generate_content = AsyncMock(return_value=response)
@@ -310,13 +310,13 @@ def test_sdk_blocked_truncated_and_invalid_json(finish, text, error):
 
 @pytest.mark.parametrize('url', ['http://example.com', 'https://user:password@example.com', 'https://example.com?key=bad', 'https://example.com#bad'])
 def test_client_no_credentials_or_insecure_external_transport(url):
-    from services.transcript_intent.client import GeminiIntentClient
+    from features.voice_assistant.transcript_intent.client import GeminiIntentClient
     with pytest.raises(ValueError):
         GeminiIntentClient(url=url)
 
 
 def test_client_binding_rejects_stale_or_duplicate_response(monkeypatch):
-    from services.transcript_intent.client import GeminiIntentClient
+    from features.voice_assistant.transcript_intent.client import GeminiIntentClient
     import requests
     session, response = MagicMock(), Mock()
     session.__enter__.return_value = session
@@ -333,8 +333,8 @@ def test_client_binding_rejects_stale_or_duplicate_response(monkeypatch):
 
 
 def test_dataset_split_groups_and_no_sensitive_false_positive():
-    from services.transcript_intent.synthetic_dataset import load_cases
-    from services.transcript_intent.policy import normalize, local_proposal, validate_proposal
+    from features.voice_assistant.transcript_intent.synthetic_dataset import load_cases
+    from features.voice_assistant.transcript_intent.policy import normalize, local_proposal, validate_proposal
     cases = load_cases()
     assert len(cases) == len({c['id'] for c in cases}) == 150
     grouped = {}
@@ -347,8 +347,8 @@ def test_dataset_split_groups_and_no_sensitive_false_positive():
 
 
 def test_real_auth_relationship_revocation(care_db):
-    from web.auth import AuthService
-    from web.api_router import ApiRouter
+    from features.web_portal.auth import AuthService
+    from features.web_portal.api_router import ApiRouter
     db, _, _ = care_db
     with db.connect() as conn:
         caregiver = conn.fetchone("SELECT c.user_id, pc.caregiver_id FROM caregivers c JOIN patient_caregivers pc ON pc.caregiver_id=c.caregiver_id WHERE pc.patient_id='patient_001' AND pc.is_active=1 LIMIT 1")
@@ -396,7 +396,7 @@ def test_voice_ui_routing_controls_and_cancel_keep_manual_buttons(qapp, monkeypa
     monkeypatch.setitem(sys.modules, "sounddevice", Mock())  # No physical audio in widget tests.
     from PyQt5.QtCore import QObject, pyqtSignal
     from PyQt5.QtWidgets import QPushButton
-    from app.local_voice_widget import LocalVoiceWidget
+    from apps.desktop.local_voice_widget import LocalVoiceWidget
     class Controller(QObject):
         changed = pyqtSignal(str, str)
         transcript_ready = pyqtSignal(object, object)
@@ -435,7 +435,7 @@ def test_voice_ui_single_transcript_callback_reviews_validated_proposal(qapp, mo
     import sys
     monkeypatch.setitem(sys.modules, "sounddevice", Mock())
     from PyQt5.QtCore import QObject, pyqtSignal
-    from app.local_voice_widget import LocalVoiceWidget
+    from apps.desktop.local_voice_widget import LocalVoiceWidget
     class Controller(QObject):
         changed = pyqtSignal(str, str)
         transcript_ready = pyqtSignal(object, object)

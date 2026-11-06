@@ -1,8 +1,8 @@
 import pytest
 
-from ai_core.posture_activity_monitoring.domain import Observation, Posture
-from ai_core.posture_activity_monitoring.engine.classifier import classify
-from ai_core.posture_activity_monitoring.engine.geometry import compute_features
+from features.posture_activity.domain import Observation, Posture
+from features.posture_activity.engine.classifier import classify
+from features.posture_activity.engine.geometry import compute_features
 from tests.ai_features.synth import landmarks, obs
 
 
@@ -43,7 +43,7 @@ def test_hidden_torso_gives_no_features():
 
 
 def _features(**kw):
-    from ai_core.posture_activity_monitoring.engine.geometry import BodyFeatures
+    from features.posture_activity.engine.geometry import BodyFeatures
 
     base = dict(torso_px=100.0, torso_orientation=90.0, hip_norm=(0.5, 0.5), hip_px=(320.0, 240.0), legs_visible=True)
     base.update(kw)

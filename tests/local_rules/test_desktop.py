@@ -4,8 +4,8 @@ from types import SimpleNamespace
 import pytest
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QApplication
-from services.local_rules.desktop import LocalRulesCoordinator
-from services.local_rules.requests import RequestService
+from features.voice_assistant.local_rules.desktop import LocalRulesCoordinator
+from features.voice_assistant.local_rules.requests import RequestService
 from test_requests import setup
 
 APP=QApplication.instance() or QApplication([])
@@ -119,7 +119,7 @@ def test_no_cloud_import_or_call_default(desktop,monkeypatch):
     import sys
     import importlib.util
     from pathlib import Path
-    spec=importlib.util.spec_from_file_location('isolated_voice_widget',Path('app/local_voice_widget.py'))
+    spec=importlib.util.spec_from_file_location('isolated_voice_widget',Path('apps/desktop/local_voice_widget.py'))
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
     LocalVoiceWidget=module.LocalVoiceWidget
     from PyQt5.QtCore import QObject,pyqtSignal
@@ -128,13 +128,13 @@ def test_no_cloud_import_or_call_default(desktop,monkeypatch):
         state='idle'
     c,ctx,e,m,t,db=desktop
     # Attach with fake business adapter so construction cannot reach real notification targets.
-    from services.voice_ai.business_adapters.assistance_adapter import DoctorAssistanceAdapter
+    from features.voice_assistant.voice_ai.business_adapters.assistance_adapter import DoctorAssistanceAdapter
     monkeypatch.setattr(DoctorAssistanceAdapter,'local_request_service',lambda *args:RequestService(db,t))
     monkeypatch.delenv('VOICE_SEMANTIC_BACKEND',raising=False)
     before=set(sys.modules)
     widget=LocalVoiceWidget(Controller(),c.dispatcher)
     assert isinstance(widget.request_coordinator,LocalRulesCoordinator)
-    assert 'services.transcript_intent.gemini_adapter' not in (set(sys.modules)-before)
+    assert 'features.voice_assistant.transcript_intent.gemini_adapter' not in (set(sys.modules)-before)
     widget.shutdown()
 
 
@@ -163,7 +163,7 @@ def test_unknown_identity_never_uses_default_profile(desktop):
 
 
 def test_voice_snapshot_requires_real_identity_mapping(setup):
-    from services.local_voice.dispatcher import CommandDispatcher
+    from features.voice_assistant.local_voice.dispatcher import CommandDispatcher
     db,t,s=setup
     todo=SimpleNamespace(db=db,patient_id='p1',sync_client=SimpleNamespace(patient_id='p1'))
     window=SimpleNamespace(today_todo_widget=todo,current_patient_id='1',current_patient_name='Known',
@@ -204,9 +204,9 @@ def test_controller_idle_keeps_recipient_preview_visible(desktop,monkeypatch):
     import importlib.util
     from pathlib import Path
     from PyQt5.QtCore import QObject,pyqtSignal
-    from services.voice_ai.business_adapters.assistance_adapter import DoctorAssistanceAdapter
+    from features.voice_assistant.voice_ai.business_adapters.assistance_adapter import DoctorAssistanceAdapter
     c,ctx,e,m,t,db=desktop
-    spec=importlib.util.spec_from_file_location('preview_voice_widget',Path('app/local_voice_widget.py'))
+    spec=importlib.util.spec_from_file_location('preview_voice_widget',Path('apps/desktop/local_voice_widget.py'))
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
     class Controller(QObject):
         changed=pyqtSignal(str,str);transcript_ready=pyqtSignal(object,object)

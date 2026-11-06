@@ -10,18 +10,18 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from services.voice_ai.domain.contracts import (
+from features.voice_assistant.voice_ai.domain.contracts import (
     IntentPriority,
     IntentType,
     SemanticResult,
 )
-from services.voice_ai.semantic.factory import get_semantic_provider
-from services.voice_ai.semantic.gemini_provider import (
+from features.voice_assistant.voice_ai.semantic.factory import get_semantic_provider
+from features.voice_assistant.voice_ai.semantic.gemini_provider import (
     GeminiSemanticProvider,
     mask_secret,
 )
-from services.voice_ai.semantic.mock_provider import MockSemanticProvider
-from services.voice_ai.semantic.prompts import (
+from features.voice_assistant.voice_ai.semantic.mock_provider import MockSemanticProvider
+from features.voice_assistant.voice_ai.semantic.prompts import (
     PROMPT_VERSION,
     build_gemini_prompt_payload,
     sanitize_elderly_context,

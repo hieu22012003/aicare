@@ -15,11 +15,11 @@ def main():
         os.environ['AI_CARE_TEST_DATA_DIR'] = data
         from unittest.mock import patch
         from PyQt5.QtWidgets import QApplication
-        from database.connection import UnifiedDatabaseManager
-        from database.migrator import Migrator
-        from database.importer import DataImporter
-        from core.camera_manager import CameraManager
-        from app.dashboard import DashboardWindow
+        from shared.database.connection import UnifiedDatabaseManager
+        from shared.database.migrator import Migrator
+        from shared.database.importer import DataImporter
+        from shared.camera.camera_manager import CameraManager
+        from apps.desktop.dashboard import DashboardWindow
         import time
         db = UnifiedDatabaseManager()
         Migrator(db).apply_all()
@@ -62,7 +62,7 @@ def main():
                 window.resize(1366, 900)
                 app.processEvents()
                 if enabled == 'true':
-                    assert window.grab().save(str(Path('reports/local_stt/ui-visible.png').resolve()))
+                    assert window.grab().save(str(Path('docs/test-reports/local_stt/ui-visible.png').resolve()))
                 window.close()
                 app.processEvents()
                 assert not c.process.is_alive()

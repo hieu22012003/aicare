@@ -16,11 +16,11 @@ if str(REPO_ROOT) not in sys.path:
 
 import pytest
 from datetime import date
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from web.api_router import ApiRouter
-from web.auth import AuthService
-from services.elder_sync_client import ElderSyncClient
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from features.web_portal.api_router import ApiRouter
+from features.web_portal.auth import AuthService
+from shared.services.elder_sync_client import ElderSyncClient
 
 
 def test_prescription_cancel_immediate_sync():

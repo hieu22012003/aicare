@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 import pytest
 
-MODULE = Path(__file__).resolve().parents[1]/'packaging/windows_portable/portable_native.py'
+MODULE = Path(__file__).resolve().parents[1]/'deploy/windows/packaging/windows_portable/portable_native.py'
 
 
 def module():
@@ -33,7 +33,7 @@ def test_incomplete_crt_rejected_before_loading(case, tmp_path):
 
 @pytest.mark.skipif(__import__('os').name != 'nt', reason='Windows native paths')
 def test_zipformer_uses_ascii_relative_paths_under_unicode_parent(tmp_path, monkeypatch):
-    from services.local_voice.engine import LocalSttEngine, MODEL_FILES
+    from features.voice_assistant.local_voice.engine import LocalSttEngine, MODEL_FILES
     app = tmp_path/'Máy mới có dấu'
     model = app/'data/models/zipformer'
     model.mkdir(parents=True)

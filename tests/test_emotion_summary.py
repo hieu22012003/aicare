@@ -2,7 +2,7 @@ from types import SimpleNamespace
 import numpy as np
 
 def test_sad_sensitivity_is_slightly_higher_without_changing_resting_face():
-    from adapters.emotion_adapter import EmotionAdapter
+    from features.emotion.emotion_adapter import EmotionAdapter
     def face(corner_y):
         landmarks = [SimpleNamespace(x=0., y=0., z=0.) for _ in range(468)]
         for index, xy in {33: (0., 0.), 263: (1., 0.), 61: (.3, corner_y),

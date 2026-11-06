@@ -8,7 +8,7 @@ import time
 from collections import defaultdict
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from services.local_rules.engine import IntentEngine
+from features.voice_assistant.local_rules.engine import IntentEngine
 
 
 def main():
@@ -33,7 +33,7 @@ def main():
                 dataset=f'{len(cases)} synthetic golden cases; no field accuracy claim',stt='not part of parser timing',network='not used',
                 groups={g:dict(cases=counts[g],correct=correct[g],**measure(v)) for g,v in groups.items()},
                 total=measure([x for values in groups.values() for x in values]))
-    out=Path('reports/local_rules/benchmark.json');out.parent.mkdir(parents=True,exist_ok=True)
+    out=Path('docs/test-reports/local_rules/benchmark.json');out.parent.mkdir(parents=True,exist_ok=True)
     out.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     print(json.dumps(report,ensure_ascii=False,indent=2))
     assert all(correct[g]==counts[g] for g in counts)

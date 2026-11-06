@@ -13,12 +13,12 @@ from pathlib import Path
 
 import pytest
 
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from services.family_music_service import FamilyMusicService, MAX_AUDIO_BYTES
-from web.api_router import ApiRouter
-from web.auth import AuthService
-from web.server import HealthcareHttpHandler
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from features.music_care.family_music_service import FamilyMusicService, MAX_AUDIO_BYTES
+from features.web_portal.api_router import ApiRouter
+from features.web_portal.auth import AuthService
+from features.web_portal.server import HealthcareHttpHandler
 
 
 def wav_bytes(seconds=1):
@@ -34,7 +34,7 @@ def wav_bytes(seconds=1):
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
-    import config
+    from shared import config
     monkeypatch.setattr(config, 'MEDIA_DIR', tmp_path / 'media')
     db = UnifiedDatabaseManager(tmp_path / 'care.sqlite3')
     Migrator(db).apply_all()
@@ -134,7 +134,7 @@ def test_upload_permissions_and_patient_scoped_audio(env):
 
 
 def test_failed_database_write_cleans_up_media(env, monkeypatch):
-    import services.family_music_service as module
+    import features.music_care.family_music_service as module
     db, _, _, _, tmp = env
     def fail(*args, **kwargs):
         raise RuntimeError('simulated outbox failure')
@@ -198,9 +198,9 @@ def test_http_rejects_oversized_upload_before_reading_body(http_env):
 
 
 def game_repo(db):
-    from modules.cognitive_games.database.connection import DatabaseManager
-    from modules.cognitive_games.database.seed_data import seed_catalogs_only
-    from modules.cognitive_games.adapters.music_repository import SqlMusicRepository
+    from features.music_care.cognitive_games.database.connection import DatabaseManager
+    from features.music_care.cognitive_games.database.seed_data import seed_catalogs_only
+    from features.music_care.cognitive_games.adapters.music_repository import SqlMusicRepository
     games = DatabaseManager(':memory:')
     seed_catalogs_only(games)
     with games.connect() as conn:
@@ -213,7 +213,7 @@ def game_repo(db):
 
 
 def test_elder_catalog_scopes_uploads_and_supports_listening_history(env):
-    from modules.cognitive_games.services.audio_service import AudioService
+    from features.music_care.cognitive_games.services.audio_service import AudioService
     db, _, _, _, _ = env
     status, saved = upload(env)
     track_id = saved['track']['track_id']
@@ -231,8 +231,8 @@ def test_elder_catalog_scopes_uploads_and_supports_listening_history(env):
 
 def test_elder_widget_receives_new_track_without_autoplay_or_interrupt(env):
     from PyQt5.QtWidgets import QApplication
-    from modules.cognitive_games.services.audio_service import AudioService
-    from modules.cognitive_games.ui.music_player_widget import MusicPlayerWidget
+    from features.music_care.cognitive_games.services.audio_service import AudioService
+    from features.music_care.cognitive_games.ui.music_player_widget import MusicPlayerWidget
     db, _, _, _, _ = env
     app = QApplication.instance() or QApplication([])
     repo = game_repo(db)
@@ -277,8 +277,8 @@ def test_elder_widget_receives_new_track_without_autoplay_or_interrupt(env):
 
 def test_elder_todo_no_longer_has_manual_mood_confirmation(env):
     from PyQt5.QtWidgets import QApplication, QPushButton
-    from app.today_todo_widget import TodayTodoWidget
-    from services.elder_sync_client import ElderSyncClient
+    from apps.desktop.today_todo_widget import TodayTodoWidget
+    from shared.services.elder_sync_client import ElderSyncClient
     db, _, _, _, tmp = env
     app = QApplication.instance() or QApplication([])
     widget = TodayTodoWidget(db, sync_client=ElderSyncClient(db, queue_dir=tmp / 'queue'))

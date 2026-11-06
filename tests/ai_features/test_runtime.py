@@ -4,10 +4,10 @@ from datetime import datetime, timedelta, timezone
 
 import numpy as np
 
-from ai_core.integration.app_hooks import voice_reply
-from ai_core.integration.runtime import AICoreRuntime, enabled
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
+from shared.ai_runtime.app_hooks import voice_reply
+from shared.ai_runtime.runtime import AICoreRuntime, enabled
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
 
 PID = "pat_rt_1"
 UTC = timezone.utc

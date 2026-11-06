@@ -14,13 +14,13 @@ from unittest.mock import MagicMock, patch
 
 from PyQt5.QtWidgets import QApplication
 
-from app.voice_button_widget import VoiceButtonWidget
-from services.voice_ai.asr.factory import get_asr_provider
-from services.voice_ai.asr.mock_provider import MockASRProvider
-from services.voice_ai.asr.provider import ASRProvider
-from services.voice_ai.audio.capture import AudioCaptureConfig, AudioRecorder
-from services.voice_ai.audio.vad import is_speech_present
-from services.voice_ai.domain.contracts import TranscriptResult
+from apps.desktop.voice_button_widget import VoiceButtonWidget
+from features.voice_assistant.voice_ai.asr.factory import get_asr_provider
+from features.voice_assistant.voice_ai.asr.mock_provider import MockASRProvider
+from features.voice_assistant.voice_ai.asr.provider import ASRProvider
+from features.voice_assistant.voice_ai.audio.capture import AudioCaptureConfig, AudioRecorder
+from features.voice_assistant.voice_ai.audio.vad import is_speech_present
+from features.voice_assistant.voice_ai.domain.contracts import TranscriptResult
 
 # Ensure offscreen Qt application exists for widget tests
 app = QApplication.instance()
@@ -82,7 +82,7 @@ class TestAudioCaptureAndASR(unittest.TestCase):
         wav_bytes = recorder.stop_recording()
         self.assertIsNotNone(wav_bytes)
 
-        from config import DATA_DIR
+        from shared.config import DATA_DIR
         recordings_dir = DATA_DIR / "voice_recordings"
         # Directory should either not exist or have 0 files created by this test
         if recordings_dir.exists():

@@ -15,15 +15,15 @@ import concurrent.futures
 from unittest.mock import patch
 import pytest
 
-from services.voice_ai.config import VoiceAIConfig
-from services.voice_ai.domain.contracts import (
+from features.voice_assistant.voice_ai.config import VoiceAIConfig
+from features.voice_assistant.voice_ai.domain.contracts import (
     ExecutionStatus,
     IntentType,
     VoiceIntent,
 )
-from services.voice_ai.orchestrator.router import WorkflowOrchestrator
-from services.voice_ai.safety.assistance_rules import DeterministicSafetyDetector
-from services.voice_ai.semantic.mock_provider import MockSemanticProvider
+from features.voice_assistant.voice_ai.orchestrator.router import WorkflowOrchestrator
+from features.voice_assistant.voice_ai.safety.assistance_rules import DeterministicSafetyDetector
+from features.voice_assistant.voice_ai.semantic.mock_provider import MockSemanticProvider
 from tests.voice_ai.test_fixtures import MANDATORY_UTTERANCE_TESTS
 
 

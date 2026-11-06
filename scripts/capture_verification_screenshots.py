@@ -29,9 +29,9 @@ from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QImage, QPixmap
 
-from app.dashboard import DashboardWindow, STYLESHEET
-from app.registration_dialog import RegistrationDialog
-from app.theme import (
+from apps.desktop.dashboard import DashboardWindow, STYLESHEET
+from apps.desktop.registration_dialog import RegistrationDialog
+from apps.desktop.theme import (
     COLOR_DANGER_BG, COLOR_DANGER, COLOR_DANGER_BORDER,
     COLOR_WARNING_BG, COLOR_WARNING, COLOR_WARNING_BORDER,
     COLOR_TEST_BG, COLOR_PRIMARY,

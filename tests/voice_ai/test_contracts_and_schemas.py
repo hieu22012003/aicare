@@ -10,7 +10,7 @@ import time
 import unittest
 from typing import Any, Dict
 
-from services.voice_ai.domain.contracts import (
+from features.voice_assistant.voice_ai.domain.contracts import (
     INTENT_PRIORITY_MAP,
     ExecutionStatus,
     IntentPriority,
@@ -18,13 +18,13 @@ from services.voice_ai.domain.contracts import (
     RedFlagSeverity,
     VoiceIntent,
 )
-from services.voice_ai.orchestrator.state_machine import (
+from features.voice_assistant.voice_ai.orchestrator.state_machine import (
     SessionState,
     VoiceSessionStateMachine,
 )
-from services.voice_ai.safety.assistance_rules import DeterministicSafetyDetector
-from services.voice_ai.semantic.mock_provider import MockSemanticProvider
-from services.voice_ai.semantic.schemas import (
+from features.voice_assistant.voice_ai.safety.assistance_rules import DeterministicSafetyDetector
+from features.voice_assistant.voice_ai.semantic.mock_provider import MockSemanticProvider
+from features.voice_assistant.voice_ai.semantic.schemas import (
     ALLOWED_ENTITIES_PER_INTENT,
     GEMINI_SEMANTIC_JSON_SCHEMA,
     validate_semantic_payload,

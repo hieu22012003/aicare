@@ -26,38 +26,38 @@ from PyQt5.QtGui import QKeyEvent
 from PyQt5.QtWidgets import QApplication
 import pytest
 
-from app.voice_button_widget import VoiceButtonWidget
-from database.connection import UnifiedDatabaseManager
-from database.importer import DataImporter
-from database.migrator import Migrator
-from services.voice_ai.asr.provider import ASRProvider
-from services.voice_ai.audio.capture import AudioRecorder
-from services.voice_ai.audio.tts_player import TTSPlaybackCoordinator
-from services.voice_ai.business_adapters.medication_adapter import MedicationAdapter
-from services.voice_ai.domain.contracts import (
+from apps.desktop.voice_button_widget import VoiceButtonWidget
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.importer import DataImporter
+from shared.database.migrator import Migrator
+from features.voice_assistant.voice_ai.asr.provider import ASRProvider
+from features.voice_assistant.voice_ai.audio.capture import AudioRecorder
+from features.voice_assistant.voice_ai.audio.tts_player import TTSPlaybackCoordinator
+from features.voice_assistant.voice_ai.business_adapters.medication_adapter import MedicationAdapter
+from features.voice_assistant.voice_ai.domain.contracts import (
     ExecutionStatus,
     IntentPriority,
     IntentType,
     TranscriptResult,
     VoiceIntent,
 )
-from services.voice_ai.observability.tracer import (
+from features.voice_assistant.voice_ai.observability.tracer import (
     mask_patient_id,
     mask_secret,
     mask_transcript_preview,
     start_trace,
 )
-from services.voice_ai.orchestrator.router import WorkflowOrchestrator
-from services.voice_ai.orchestrator.state_machine import SessionState
-from services.voice_ai.semantic.gemini_provider import GeminiSemanticProvider
+from features.voice_assistant.voice_ai.orchestrator.router import WorkflowOrchestrator
+from features.voice_assistant.voice_ai.orchestrator.state_machine import SessionState
+from features.voice_assistant.voice_ai.semantic.gemini_provider import GeminiSemanticProvider
 
 
 @pytest.fixture
 def test_db():
     db = UnifiedDatabaseManager(":memory:")
-    with open("database/migrations/001_initial_schema.sql", encoding="utf-8") as f:
+    with open("shared/database/migrations/001_initial_schema.sql", encoding="utf-8") as f:
         sql1 = f.read()
-    with open("database/migrations/003_outbox_and_sync.sql", encoding="utf-8") as f:
+    with open("shared/database/migrations/003_outbox_and_sync.sql", encoding="utf-8") as f:
         sql3 = f.read()
 
     with db.connect() as conn:

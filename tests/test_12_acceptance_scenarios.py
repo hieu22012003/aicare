@@ -25,13 +25,13 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from database.importer import DataImporter
-from database.backup_restore import BackupRestoreService
-from web.auth import AuthService
-from web.api_router import ApiRouter
-from modules.rehabilitation.rehab_session_adapter import RehabSessionAdapter
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from shared.database.importer import DataImporter
+from shared.database.backup_restore import BackupRestoreService
+from features.web_portal.auth import AuthService
+from features.web_portal.api_router import ApiRouter
+from features.exercise_rehab.rehab_session_adapter import RehabSessionAdapter
 
 UTC = timezone.utc
 

@@ -1,5 +1,5 @@
 """
-Tests for Voice AI REST API Endpoints mounted in web/api_router.py.
+Tests for Voice AI REST API Endpoints mounted in features/web_portal/api_router.py.
 Validates Section 5 and Phase 4-6 of VOICE_AI_IMPLEMENTATION_PLAN.md:
 - POST /api/v1/voice/interactions (transcript, audio_base64, idempotency, auth)
 - GET /api/v1/voice/interactions/{interaction_id} (status, intents, authorization)
@@ -15,14 +15,14 @@ import json
 import unittest
 from typing import Any, Dict
 
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from database.importer import DataImporter
-from web.auth import AuthService
-from web.api_router import ApiRouter
-from services.voice_ai.semantic.mock_provider import MockSemanticProvider
-from services.voice_ai.asr.mock_provider import MockASRProvider
-from services.voice_ai.orchestrator.router import WorkflowOrchestrator
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from shared.database.importer import DataImporter
+from features.web_portal.auth import AuthService
+from features.web_portal.api_router import ApiRouter
+from features.voice_assistant.voice_ai.semantic.mock_provider import MockSemanticProvider
+from features.voice_assistant.voice_ai.asr.mock_provider import MockASRProvider
+from features.voice_assistant.voice_ai.orchestrator.router import WorkflowOrchestrator
 
 
 class TestVoiceAIWebApiEndpoints(unittest.TestCase):

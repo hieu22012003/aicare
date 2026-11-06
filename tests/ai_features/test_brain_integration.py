@@ -4,13 +4,13 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from ai_core.integration.brain import AICoreBrain, is_find_object
-from ai_core.integration.store import AICoreStore
-from ai_core.medication_intake_monitoring.domain import IntakeObservation, IntakeVerdict
-from ai_core.object_finder.domain import DetectionFrame, DetectionIn
-from ai_core.shared.pose.observation import Observation
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
+from shared.ai_runtime.brain import AICoreBrain, is_find_object
+from shared.ai_runtime.store import AICoreStore
+from features.medication.intake_monitoring.domain import IntakeObservation, IntakeVerdict
+from features.object_finder.domain import DetectionFrame, DetectionIn
+from shared.vision.pose.observation import Observation
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
 from tests.ai_features.synth import landmarks
 
 UTC = timezone.utc

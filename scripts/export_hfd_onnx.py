@@ -8,7 +8,7 @@ from openpifpaf.export_onnx import apply, check
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument('--weights',default='modules/fall/models/shufflenetv2k16.pkl')
+    parser.add_argument('--weights',default='features/fall_risk/hfd_model/models/shufflenetv2k16.pkl')
     parser.add_argument('--size',default='513x289')
     args=parser.parse_args()
     path=Path(args.weights).resolve()

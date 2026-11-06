@@ -3,12 +3,12 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 import pytest
 from pydantic import ValidationError
-from services.transcript_intent.registry import Intent, REGISTRY, allowed_intents
-from services.transcript_intent.schema import IntentProposal, Slots, Decision, proposal
-from services.transcript_intent.policy import local_proposal, privacy_eligible, validate_proposal
-from services.transcript_intent.config import BackendConfig
-from services.transcript_intent.service import GeminiIntentService
-from services.transcript_intent.budget import ProjectBudget, RoutingUnavailable
+from features.voice_assistant.transcript_intent.registry import Intent, REGISTRY, allowed_intents
+from features.voice_assistant.transcript_intent.schema import IntentProposal, Slots, Decision, proposal
+from features.voice_assistant.transcript_intent.policy import local_proposal, privacy_eligible, validate_proposal
+from features.voice_assistant.transcript_intent.config import BackendConfig
+from features.voice_assistant.transcript_intent.service import GeminiIntentService
+from features.voice_assistant.transcript_intent.budget import ProjectBudget, RoutingUnavailable
 
 
 @pytest.fixture

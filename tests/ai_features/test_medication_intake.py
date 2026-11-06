@@ -1,11 +1,11 @@
 """Intake detector + dose policy on synthetic Holistic landmarks (pixels, 640x480 frame)."""
 
-from ai_core.medication_intake_monitoring.detector import (
+from features.medication.intake_monitoring.detector import (
     CHIN, FACE_LEFT, FACE_RIGHT, FOREHEAD, INDEX_MCP, INDEX_TIP, LIP_LOWER_INNER, LIP_UPPER_INNER,
     MOUTH_LEFT, MOUTH_RIGHT, NOSE_TIP, PINKY_MCP, THUMB_TIP, IntakeDetector,
 )
-from ai_core.medication_intake_monitoring.domain import Hand, HolisticFrame, IntakeConfig, IntakeVerdict
-from ai_core.medication_intake_monitoring.policy import DoseAction, MonitorPolicy, due_actions, skipped_speech
+from features.medication.intake_monitoring.domain import Hand, HolisticFrame, IntakeConfig, IntakeVerdict
+from features.medication.intake_monitoring.policy import DoseAction, MonitorPolicy, due_actions, skipped_speech
 
 MOUTH = (320.0, 200.0)
 FPS = 10

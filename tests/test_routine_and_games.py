@@ -33,13 +33,13 @@ app = QApplication.instance()
 if app is None:
     app = QApplication(sys.argv)
 
-from app.cognitive_games_widget import CognitiveGamesWidget
-from app.dashboard import DashboardWindow
-from app.today_todo_widget import TodayTodoWidget
-from config import EXERCISES
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from database.importer import DataImporter
+from apps.desktop.cognitive_games_widget import CognitiveGamesWidget
+from apps.desktop.dashboard import DashboardWindow
+from apps.desktop.today_todo_widget import TodayTodoWidget
+from shared.config import EXERCISES
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from shared.database.importer import DataImporter
 
 
 class TestRehabRoutineAndCognitiveGames(unittest.TestCase):
@@ -124,7 +124,7 @@ class TestRehabRoutineAndCognitiveGames(unittest.TestCase):
             self.assertEqual(window.active_exercise_id, "marching")
 
             # 4. Complete Step 3 (15 marching steps)
-            with patch("app.dashboard.QMessageBox.information") as mock_info:
+            with patch("apps.desktop.dashboard.QMessageBox.information") as mock_info:
                 window.router.rehab_adapter.get_result = MagicMock(return_value={
                     "repetitions": 15,
                     "target_reps": 15,
@@ -222,7 +222,7 @@ class TestRehabRoutineAndCognitiveGames(unittest.TestCase):
         window = DashboardWindow()
         try:
             now_16h = datetime(2026, 12, 1, 16, 5, 0)
-            with patch("app.dashboard.QMessageBox.question", return_value=16384) as mock_q:  # QMessageBox.Yes = 16384
+            with patch("apps.desktop.dashboard.QMessageBox.question", return_value=16384) as mock_q:  # QMessageBox.Yes = 16384
                 window._check_16h_reminder(now_16h)
                 # If question was asked and user clicked Yes, routine mode started
                 self.assertTrue(window.is_routine_mode or mock_q.called)

@@ -36,7 +36,7 @@ from PyQt5.QtCore import Qt, QSize, QTimer
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QPixmap, QImage
 
-from app.dashboard import DashboardWindow, STYLESHEET
+from apps.desktop.dashboard import DashboardWindow, STYLESHEET
 
 def run_verification():
     print("=" * 60)
@@ -47,13 +47,13 @@ def run_verification():
     app.setStyleSheet(STYLESHEET)
 
     # Ensure output screenshots directory exists
-    screenshot_dir = Path("reports/screenshots")
+    screenshot_dir = Path("docs/test-reports/screenshots")
     screenshot_dir.mkdir(parents=True, exist_ok=True)
 
     # Initialize unified database schema
-    from database.connection import UnifiedDatabaseManager
-    from database.migrator import Migrator
-    from services.patient_sync_service import sync_all_patient_profiles
+    from shared.database.connection import UnifiedDatabaseManager
+    from shared.database.migrator import Migrator
+    from shared.services.patient_sync_service import sync_all_patient_profiles
     db = UnifiedDatabaseManager()
     Migrator(db).apply_all()
     sync_all_patient_profiles(db)

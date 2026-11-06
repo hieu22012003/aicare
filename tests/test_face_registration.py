@@ -2,7 +2,7 @@
 Unit tests for decoupled Face Recognition & Patient Registration system.
 """
 
-import config
+from shared import config
 import sys
 import unittest
 import numpy as np
@@ -10,8 +10,8 @@ import cv2
 from pathlib import Path
 from PyQt5.QtWidgets import QApplication
 
-from adapters.face_adapter import FaceAdapter
-from app.registration_dialog import RegistrationDialog, PatientManagementDialog
+from features.face_monitoring.face_adapter import FaceAdapter
+from apps.desktop.registration_dialog import RegistrationDialog, PatientManagementDialog
 
 # Ensure single QApplication instance for Qt tests
 app = QApplication.instance() or QApplication(sys.argv)

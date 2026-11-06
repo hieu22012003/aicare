@@ -19,13 +19,13 @@ def main():
     with tempfile.TemporaryDirectory(prefix='local-rules-dashboard-') as data:
         os.environ['AI_CARE_TEST_DATA_DIR']=data
         from PyQt5.QtWidgets import QApplication
-        from database.connection import UnifiedDatabaseManager
-        from database.migrator import Migrator
-        from database.importer import DataImporter
-        from core.camera_manager import CameraManager
-        from app.dashboard import DashboardWindow
-        from services.local_rules.requests import RequestService
-        from services.voice_ai.business_adapters.assistance_adapter import DoctorAssistanceAdapter
+        from shared.database.connection import UnifiedDatabaseManager
+        from shared.database.migrator import Migrator
+        from shared.database.importer import DataImporter
+        from shared.camera.camera_manager import CameraManager
+        from apps.desktop.dashboard import DashboardWindow
+        from features.voice_assistant.local_rules.requests import RequestService
+        from features.voice_assistant.voice_ai.business_adapters.assistance_adapter import DoctorAssistanceAdapter
         db=UnifiedDatabaseManager();Migrator(db).apply_all();DataImporter(db).import_all()
         # Explicit fake recipient mapping: never rely on imported demo/production contacts.
         with db.connect() as conn:
@@ -65,7 +65,7 @@ def main():
             assert len(transport.calls)==1
             assert 'Máy chủ thư đã chấp nhận' in window.local_voice_widget.status.text()
             window.showNormal();window.resize(1366,900);app.processEvents()
-            assert window.grab().save('reports/local_rules/ui-smoke.png')
+            assert window.grab().save('docs/test-reports/local_rules/ui-smoke.png')
             window.close();app.processEvents()
             assert not window.local_voice_controller.process.is_alive()
             print('PASS full dashboard with fake camera, fake audio module, fake final transcript, fake SMTP adapter; real business DB/service in temporary directory.')

@@ -14,14 +14,14 @@ os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 
 with tempfile.TemporaryDirectory(prefix='medication-smoke-') as data:
     os.environ['AI_CARE_TEST_DATA_DIR'] = data
-    import config
+    from shared import config
     import numpy as np
     from unittest.mock import patch
     from PyQt5.QtWidgets import QApplication
     from PyQt5.QtGui import QFontDatabase, QFont
-    from core.camera_manager import CameraManager
-    from services.user_service import UserService
-    from app.dashboard import DashboardWindow
+    from shared.camera.camera_manager import CameraManager
+    from shared.services.user_service import UserService
+    from apps.desktop.dashboard import DashboardWindow
 
     app = QApplication([])
     for filename in ('arial.ttf','segoeui.ttf','segoeuib.ttf'):
@@ -52,7 +52,7 @@ with tempfile.TemporaryDirectory(prefix='medication-smoke-') as data:
         assert window._process_video_frame(frame.copy()).shape == frame.shape
         window.router.stop_exercise()
         window.update_dashboard_ui()
-        for retired in ('services.fall_monitor','services.fall_test_runner','adapters.fall_adapter','modules.fall.fall_detector'):
+        for retired in ('features.fall_risk.fall_monitor','features.fall_risk.fall_test_runner','features.fall_risk.fall_adapter','features.fall_risk.hfd_model.fall_detector'):
             assert retired not in sys.modules, retired
         output = root/'docs'/'medication_reminder'/'screenshots'
         output.mkdir(parents=True,exist_ok=True)

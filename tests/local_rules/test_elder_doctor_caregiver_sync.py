@@ -7,10 +7,10 @@ to the assigned doctor and caregiver without errors.
 
 from types import SimpleNamespace
 import pytest
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from services.local_rules.requests import RequestService
-from services.local_rules.engine import IntentEngine
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from features.voice_assistant.local_rules.requests import RequestService
+from features.voice_assistant.local_rules.engine import IntentEngine
 
 
 class RecordingTransport:

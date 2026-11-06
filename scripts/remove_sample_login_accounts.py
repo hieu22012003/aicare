@@ -1,4 +1,4 @@
-"""Remove the seven shipped sample logins, with a database/profile backup."""
+"""Remove the seven shipped sample logins, with a shared/database/profile backup."""
 import argparse
 from datetime import datetime, timezone
 import json
@@ -50,7 +50,7 @@ def clean(home):
         with sqlite3.connect(backup/'unified_care.sqlite3') as copy:
             conn.backup(copy)
         conn.execute('PRAGMA foreign_keys=ON')
-        conn.executescript((ROOT/'database/migrations'/f'{MIGRATION}.sql').read_text(encoding='utf-8'))
+        conn.executescript((ROOT/'shared/database/migrations'/f'{MIGRATION}.sql').read_text(encoding='utf-8'))
         conn.execute('INSERT OR IGNORE INTO schema_migrations(version,applied_at) VALUES (?,?)',
                      (MIGRATION, datetime.now(timezone.utc).isoformat()))
         assert not conn.execute('PRAGMA foreign_key_check').fetchall()

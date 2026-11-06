@@ -16,10 +16,10 @@ os.environ["QT_QPA_PLATFORM"] = "offscreen"
 from PyQt5.QtWidgets import QApplication, QLabel
 from PyQt5.QtCore import Qt
 
-from app.today_todo_widget import TodayTodoWidget
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from database.importer import DataImporter
+from apps.desktop.today_todo_widget import TodayTodoWidget
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from shared.database.importer import DataImporter
 from scripts.generate_portal_screenshots import (
     build_caregiver_portal,
     build_caregiver_vitals_entry_portal,

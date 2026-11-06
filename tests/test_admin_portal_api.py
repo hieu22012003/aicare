@@ -12,10 +12,10 @@ import json
 import unittest
 from datetime import datetime, timezone
 
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from web.auth import AuthService
-from web.api_router import ApiRouter
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from features.web_portal.auth import AuthService
+from features.web_portal.api_router import ApiRouter
 
 
 class TestAdminPortalApi(unittest.TestCase):

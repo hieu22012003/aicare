@@ -13,16 +13,16 @@ import mediapipe  # Windows DLL order
 import cv2
 import numpy as np
 import torch
-from core.frame_source import VideoFileFrameSource
-from core.fall_pipeline import FallPipeline, FramePacket, PersonPoseBackend
-from core.fall_backends import YoloPoseBackend, ForegroundAssistedBackend, OnnxPoseBackend
+from shared.camera.frame_source import VideoFileFrameSource
+from features.fall_risk.pipeline.fall_pipeline import FallPipeline, FramePacket, PersonPoseBackend
+from features.fall_risk.pipeline.fall_backends import YoloPoseBackend, ForegroundAssistedBackend, OnnxPoseBackend
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('video')
     parser.add_argument('--backend', choices=['hog', 'yolo', 'yolo-mediapipe', 'yolo-silhouette','onnx','hfd','hfd-pose'], required=True)
-    parser.add_argument('--weights', default='modules/fall/models/yolo11n-pose.pt')
+    parser.add_argument('--weights', default='features/fall_risk/hfd_model/models/yolo11n-pose.pt')
     parser.add_argument('--image-size', type=int, default=640)
     parser.add_argument('--output', required=True)
     parser.add_argument('--stride', type=int, default=1)
@@ -35,7 +35,7 @@ def main():
     cv2.setNumThreads(1)
     source = VideoFileFrameSource(args.video)
     if args.backend in ('hfd','hfd-pose'):
-        from modules.fall.hfd_pose_backend import HfdPoseBackend
+        from features.fall_risk.hfd_model.hfd_pose_backend import HfdPoseBackend
         backend=HfdPoseBackend()
         backend.use_hfd_classifier=args.backend=='hfd'
     else:
@@ -46,7 +46,7 @@ def main():
     pipeline = FallPipeline(backend=backend, run_id='diagnostic')
     meta = dict(video_sha256=source.sha256, source=str(Path(args.video).resolve()),
                 backend=getattr(backend, 'metadata', {'backend': 'hog-mediapipe'}),
-                stride=args.stride, baseline_sha256=hashlib.sha256((ROOT/'core/fall_pipeline.py').read_bytes()).hexdigest())
+                stride=args.stride, baseline_sha256=hashlib.sha256((ROOT/'features/fall_risk/pipeline/fall_pipeline.py').read_bytes()).hexdigest())
     (out/'manifest.json').write_text(json.dumps(meta, indent=2), encoding='utf-8')
     latencies, counts, full_pose, torso_pose, decoded = [], [], 0, 0, 0
     start = time.perf_counter()

@@ -6,8 +6,8 @@ import time
 import threading
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from services.local_voice.config import VoiceConfig
-from services.local_voice.engine import LocalSttEngine
+from features.voice_assistant.local_voice.config import VoiceConfig
+from features.voice_assistant.local_voice.engine import LocalSttEngine
 
 
 def main():
@@ -19,7 +19,7 @@ def main():
     parser.add_argument('--beam-size', type=int, choices=[1, 3, 5], default=1)
     parser.add_argument('--repeats', type=int, default=3)
     parser.add_argument('--camera', type=int)
-    parser.add_argument('--output', default='reports/local_stt/benchmark.json')
+    parser.add_argument('--output', default='docs/test-reports/local_stt/benchmark.json')
     args = parser.parse_args()
     import numpy as np
     import psutil

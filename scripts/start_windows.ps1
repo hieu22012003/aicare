@@ -118,7 +118,7 @@ if (-not (Test-Path -LiteralPath $venvPython)) {
 
     Write-Err "Chưa tìm thấy môi trường Python ảo (.venv)!"
 
-    Write-Host "`n👉 Vui lòng chạy file Setup.cmd trước để hệ thống tự động chuẩn bị môi trường.`n" -ForegroundColor Yellow
+    Write-Host "`n👉 Vui lòng chạy file deploy/windows/Setup.cmd trước để hệ thống tự động chuẩn bị môi trường.`n" -ForegroundColor Yellow
 
     exit 1
 
@@ -156,7 +156,7 @@ if (Test-Path -LiteralPath $webPidFile) {
 
             Write-Warn "Máy chủ Web/Backend đang chạy (PID: $existingWebPid)."
 
-            Write-Host "Nếu muốn khởi động lại hoàn toàn, vui lòng chạy Stop Demo.cmd trước." -ForegroundColor Yellow
+            Write-Host "Nếu muốn khởi động lại hoàn toàn, vui lòng chạy deploy/windows/Stop Demo.cmd trước." -ForegroundColor Yellow
 
         }
 
@@ -226,7 +226,7 @@ $webStartInfo = New-Object System.Diagnostics.ProcessStartInfo
 
 $webStartInfo.FileName = $venvPython
 
-$webStartInfo.Arguments = "web/server.py --host $webHost --port $webPort"
+$webStartInfo.Arguments = "features/web_portal/server.py --host $webHost --port $webPort"
 
 $webStartInfo.WorkingDirectory = $ProjectRoot
 
@@ -352,7 +352,7 @@ if (-not $NoDesktop) {
 
 
 
-    $desktopProc = Start-Process -FilePath $venvPython -ArgumentList "main.py" -WorkingDirectory $ProjectRoot -PassThru
+    $desktopProc = Start-Process -FilePath $venvPython -ArgumentList "apps/desktop/main.py" -WorkingDirectory $ProjectRoot -PassThru
 
     if ($desktopProc) {
 
@@ -378,7 +378,7 @@ if (-not $NoDesktop) {
 
         Write-Host "==================================================================" -ForegroundColor Green
 
-        Write-Host "ℹ️ Để dừng toàn bộ hệ thống đúng cách, vui lòng chạy: Stop Demo.cmd`n" -ForegroundColor Yellow
+        Write-Host "ℹ️ Để dừng toàn bộ hệ thống đúng cách, vui lòng chạy: deploy/windows/Stop Demo.cmd`n" -ForegroundColor Yellow
 
 
 

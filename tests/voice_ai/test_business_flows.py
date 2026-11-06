@@ -16,18 +16,18 @@ import json
 from datetime import datetime, timezone
 import pytest
 
-from database.connection import UnifiedDatabaseManager
-from services.voice_ai.business_adapters.assistance_adapter import DoctorAssistanceAdapter
-from services.voice_ai.business_adapters.health_adapter import HealthReportAdapter
-from services.voice_ai.business_adapters.media_games_adapter import MediaAndGamesAdapter
-from services.voice_ai.business_adapters.medication_adapter import MedicationAdapter
-from services.voice_ai.domain.contracts import (
+from shared.database.connection import UnifiedDatabaseManager
+from features.voice_assistant.voice_ai.business_adapters.assistance_adapter import DoctorAssistanceAdapter
+from features.voice_assistant.voice_ai.business_adapters.health_adapter import HealthReportAdapter
+from features.voice_assistant.voice_ai.business_adapters.media_games_adapter import MediaAndGamesAdapter
+from features.voice_assistant.voice_ai.business_adapters.medication_adapter import MedicationAdapter
+from features.voice_assistant.voice_ai.domain.contracts import (
     ExecutionStatus,
     IntentPriority,
     IntentType,
     VoiceIntent,
 )
-from services.voice_ai.orchestrator.router import WorkflowOrchestrator
+from features.voice_assistant.voice_ai.orchestrator.router import WorkflowOrchestrator
 
 UTC = timezone.utc
 
@@ -36,9 +36,9 @@ UTC = timezone.utc
 def in_memory_db():
     """Initializes in-memory database with 001 and 003 schemas and baseline test records."""
     db = UnifiedDatabaseManager(":memory:")
-    with open("database/migrations/001_initial_schema.sql", encoding="utf-8") as f:
+    with open("shared/database/migrations/001_initial_schema.sql", encoding="utf-8") as f:
         sql1 = f.read()
-    with open("database/migrations/003_outbox_and_sync.sql", encoding="utf-8") as f:
+    with open("shared/database/migrations/003_outbox_and_sync.sql", encoding="utf-8") as f:
         sql3 = f.read()
 
     with db.connect() as conn:

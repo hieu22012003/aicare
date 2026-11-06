@@ -4,12 +4,12 @@ import time
 
 import pytest
 
-from ai_core.integration.brain import AICoreBrain
-from ai_core.integration.store import AICoreStore
-from ai_core.integration.web_routes import handle_ai_route
-from ai_core.object_finder.domain import DetectionFrame, DetectionIn
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
+from shared.ai_runtime.brain import AICoreBrain
+from shared.ai_runtime.store import AICoreStore
+from shared.ai_runtime.web_routes import handle_ai_route
+from features.object_finder.domain import DetectionFrame, DetectionIn
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
 
 PID = "pat_web_1"
 

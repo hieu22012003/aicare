@@ -1,7 +1,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from ai_core.object_finder.domain import (
+from features.object_finder.domain import (
     DetectionFrame,
     DetectionIn,
     ObjectConfig,
@@ -10,7 +10,7 @@ from ai_core.object_finder.domain import (
     SightingStatus,
     normalize_vi,
 )
-from ai_core.object_finder.engine import ObjectMemory
+from features.object_finder.engine import ObjectMemory
 
 TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 T0 = datetime(2026, 11, 3, 14, 0, tzinfo=TZ).timestamp()

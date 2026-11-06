@@ -16,10 +16,10 @@ from typing import Any
 
 from PyQt5.QtWidgets import QApplication
 
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from database.importer import DataImporter
-from app.today_todo_widget import TodayTodoWidget
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from shared.database.importer import DataImporter
+from apps.desktop.today_todo_widget import TodayTodoWidget
 
 
 class TestVoiceUIDesktopMounting(unittest.TestCase):

@@ -6,7 +6,7 @@ try:
 except Exception:
     pass
 from PyQt5.QtWidgets import QApplication, QPushButton
-from app.theme import LIGHT_THEME_STYLESHEET
+from apps.desktop.theme import LIGHT_THEME_STYLESHEET
 
 app = QApplication([])
 app.setStyleSheet(LIGHT_THEME_STYLESHEET)

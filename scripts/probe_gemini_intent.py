@@ -6,11 +6,11 @@ import sys
 import time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from services.transcript_intent.config import BackendConfig
-from services.transcript_intent.gemini_adapter import GeminiIntentAdapter
-from services.transcript_intent.schema import IntentProposal
-from services.transcript_intent.registry import Intent
-from services.transcript_intent.policy import validate_proposal
+from features.voice_assistant.transcript_intent.config import BackendConfig
+from features.voice_assistant.transcript_intent.gemini_adapter import GeminiIntentAdapter
+from features.voice_assistant.transcript_intent.schema import IntentProposal
+from features.voice_assistant.transcript_intent.registry import Intent
+from features.voice_assistant.transcript_intent.policy import validate_proposal
 
 
 def main():
@@ -19,7 +19,7 @@ def main():
     parser.add_argument('--free-tier-confirmed', action='store_true')
     parser.add_argument('--diagnose-request', action='store_true')
     parser.add_argument('--check-model-only', action='store_true')
-    parser.add_argument('--output', default='reports/gemini_intent/live-smoke.json')
+    parser.add_argument('--output', default='docs/test-reports/gemini_intent/live-smoke.json')
     args = parser.parse_args()
     report = {'model': 'gemini-3.5-flash-lite', 'synthetic_only': True,
               'free_tier': 'operator_confirmed' if args.free_tier_confirmed else 'unverified',

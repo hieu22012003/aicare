@@ -24,9 +24,9 @@ def signature(value):
 
 
 archive = ZlibArchiveReader(str(PYZ))
-modules = ('config','app.dashboard','app.router','app.medication_panel',
-           'services.email_service','services.medication_service','services.medication_migration',
-           'services.user_service')
+modules = ('config','apps.desktop.dashboard','apps.desktop.router','apps.desktop.medication_panel',
+           'shared.services.email_service','features.medication.medication_service','features.medication.medication_migration',
+           'shared.services.user_service')
 for module in modules:
     source = ROOT/(module.replace('.','/')+'.py')
     expected = compile(source.read_text(encoding='utf-8'),str(source),'exec')
@@ -34,8 +34,8 @@ for module in modules:
     print('PASS source matches compiled module:',module)
 
 entry = marshal.loads(CArchiveReader(str(EXE)).extract('main'))
-assert signature(entry) == signature(compile((ROOT/'main.py').read_text(encoding='utf-8'),'main.py','exec'))
-assert not any(name.startswith(('modules.fall','adapters.fall','services.fall','core.fall','app.fall')) for name in archive.toc)
+assert signature(entry) == signature(compile((ROOT/'apps/desktop/main.py').read_text(encoding='utf-8'),'apps/desktop/main.py','exec'))
+assert not any(name.startswith(('features.fall_risk.hfd_model','adapters.fall','services.fall','core.fall','app.fall')) for name in archive.toc)
 assert not (BUNDLE/'_internal'/'data'/'users').exists()
 assert not (BUNDLE/'_internal'/'shared'/'data').exists()
 assert (BUNDLE/'_internal'/'tzdata'/'zoneinfo'/'Asia'/'Ho_Chi_Minh').is_file()

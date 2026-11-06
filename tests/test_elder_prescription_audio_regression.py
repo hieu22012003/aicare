@@ -3,11 +3,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import numpy as np
 import pytest
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from web.api_router import ApiRouter
-from web.auth import AuthService
-from services.medication_schedule_sync import ensure_medication_occurrences
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from features.web_portal.api_router import ApiRouter
+from features.web_portal.auth import AuthService
+from features.medication.medication_schedule_sync import ensure_medication_occurrences
 
 @pytest.fixture
 def care(tmp_path):
@@ -45,8 +45,8 @@ def test_rolling_schedule_repairs_missing_today_and_stays_bounded(care,tmp_path)
 
 def test_invalid_existing_prescription_visible_to_elder(care,tmp_path):
     from PyQt5.QtWidgets import QApplication,QLabel
-    from app.today_todo_widget import TodayTodoWidget
-    from services.elder_sync_client import ElderSyncClient
+    from apps.desktop.today_todo_widget import TodayTodoWidget
+    from shared.services.elder_sync_client import ElderSyncClient
     db,router=care
     assert router._create_prescription('patient_001','user_doc_001',payload())[0]==201
     with db.connect() as c:
@@ -65,7 +65,7 @@ def test_invalid_existing_prescription_visible_to_elder(care,tmp_path):
 @pytest.mark.parametrize('kind',['wav','mp3'])
 def test_real_decoder_outputs_audible_pcm_without_windows_codec(tmp_path,kind):
     from PyQt5.QtCore import QCoreApplication
-    from services.music_playback import PcmMusicPlayer
+    from features.music_care.music_playback import PcmMusicPlayer
     import av
     path=tmp_path/('tone.'+kind)
     rate=48000
@@ -97,7 +97,7 @@ def test_real_decoder_outputs_audible_pcm_without_windows_codec(tmp_path,kind):
 
 def test_missing_audio_reports_failure_instead_of_silent_playing(tmp_path):
     from PyQt5.QtCore import QCoreApplication
-    from services.music_playback import PcmMusicPlayer
+    from features.music_care.music_playback import PcmMusicPlayer
     app=QCoreApplication.instance() or QCoreApplication([])
     player=PcmMusicPlayer(output_factory=lambda **kw:None)
     errors=[];player.failed.connect(errors.append)

@@ -6,7 +6,7 @@
     {
       "id": "mediapipe-face-landmarker",
       "name": "MediaPipe Face Landmarker Task",
-      "target_path": "modules/emotion/models/face_landmarker.task",
+      "target_path": "features/emotion/model/models/face_landmarker.task",
       "size_bytes": 3758596,
       "sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
       "source_url": "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task",
@@ -16,7 +16,7 @@
     {
       "id": "mediapipe-pose-landmarker",
       "name": "MediaPipe Pose Landmarker Lite Task",
-      "target_path": "modules/rehabilitation/models/pose_landmarker_lite.task",
+      "target_path": "features/exercise_rehab/models/pose_landmarker_lite.task",
       "size_bytes": 5777746,
       "sha256": "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a",
       "source_url": "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",
@@ -26,7 +26,7 @@
     {
       "id": "opencv-face-detector-pb",
       "name": "OpenCV Res10 SSD Face Detector uint8",
-      "target_path": "modules/face/models/opencv_face_detector_uint8.pb",
+      "target_path": "features/face_monitoring/standalone/models/opencv_face_detector_uint8.pb",
       "size_bytes": 2727750,
       "sha256": "5c71d752ef2cbf2f457ac82fdd580fcb2522fd04c5efdaed18eb6d9e2843fbed",
       "source_url": "https://raw.githubusercontent.com/opencv/opencv_3rdparty/dnn_samples_face_detector_20180220_uint8/opencv_face_detector_uint8.pb",
@@ -36,7 +36,7 @@
     {
       "id": "expression-net-pth",
       "name": "ExpressionNet MLP Weight",
-      "target_path": "modules/emotion/models/expression_net.pth",
+      "target_path": "features/emotion/model/models/expression_net.pth",
       "size_bytes": 71785,
       "sha256": "f3580ca70a3eafa819fb5941402fe85e50a403fb71697f38991f2d2387488b91",
       "source_url": "",

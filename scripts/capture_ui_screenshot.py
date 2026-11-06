@@ -35,7 +35,7 @@ def capture_screenshots(prefix: str = "after"):
     if not app:
         app = QApplication(sys.argv)
         
-    from app.dashboard import DashboardWindow, STYLESHEET
+    from apps.desktop.dashboard import DashboardWindow, STYLESHEET
     app.setStyleSheet(STYLESHEET)
 
     output_dir = os.path.join(os.getcwd(), "docs", "screenshots")
@@ -74,8 +74,8 @@ def capture_screenshots(prefix: str = "after"):
     win_1920.close()
 
     # Registration Dialog capture
-    from app.registration_dialog import RegistrationDialog
-    from adapters.face_adapter import FaceAdapter
+    from apps.desktop.registration_dialog import RegistrationDialog
+    from features.face_monitoring.face_adapter import FaceAdapter
     face_adapter = FaceAdapter()
     dlg = RegistrationDialog(face_adapter=face_adapter)
     dlg.resize(900, 700)

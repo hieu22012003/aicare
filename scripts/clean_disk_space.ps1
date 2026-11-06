@@ -106,5 +106,5 @@ Write-Host "`n==================================================================
 $freedGB = [math]::Round($totalFreedMB / 1024, 2)
 Write-Host " 🎉 HOÀN TẤT DỌN DẸP! ĐÃ GIẢI PHÓNG KHOẢNG $freedGB GB BỘ NHỚ." -ForegroundColor Green
 Write-Host " Các file cốt lõi (.venv, models, code, database) được bảo toàn 100%." -ForegroundColor Green
-Write-Host " Bạn vẫn có thể khởi động bình thường bằng 'Start Demo.cmd'." -ForegroundColor Yellow
+Write-Host " Bạn vẫn có thể khởi động bình thường bằng 'deploy/windows/Start Demo.cmd'." -ForegroundColor Yellow
 Write-Host "==================================================================" -ForegroundColor Cyan

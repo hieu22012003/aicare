@@ -2,8 +2,8 @@ import json
 import unicodedata
 from pathlib import Path
 import pytest
-from services.local_rules.engine import IntentEngine, normalize, load_rules
-from services.local_rules.dialogue import Dialogue
+from features.voice_assistant.local_rules.engine import IntentEngine, normalize, load_rules
+from features.voice_assistant.local_rules.dialogue import Dialogue
 
 CASES=json.loads(Path(__file__).with_name('golden.json').read_text(encoding='utf-8'))
 ENGINE=IntentEngine()

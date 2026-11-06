@@ -16,16 +16,16 @@ import time
 from datetime import datetime, timedelta, timezone
 import pytest
 
-from database.connection import UnifiedDatabaseManager
-from services.outbox_relay import OutboxRelayService
-from services.voice_ai.business_adapters.assistance_adapter import DoctorAssistanceAdapter
-from services.voice_ai.domain.contracts import IntentType, VoiceIntent
-from services.voice_ai.realtime.assistance_coordinator import (
+from shared.database.connection import UnifiedDatabaseManager
+from shared.services.outbox_relay import OutboxRelayService
+from features.voice_assistant.voice_ai.business_adapters.assistance_adapter import DoctorAssistanceAdapter
+from features.voice_assistant.voice_ai.domain.contracts import IntentType, VoiceIntent
+from features.voice_assistant.voice_ai.realtime.assistance_coordinator import (
     AssistanceCoordinator,
     AssistanceLifecycleState,
 )
-from web.auth import AuthService
-from web.sse_hub import SSEHub
+from features.web_portal.auth import AuthService
+from features.web_portal.sse_hub import SSEHub
 
 UTC = timezone.utc
 
@@ -34,9 +34,9 @@ UTC = timezone.utc
 def realtime_db():
     """Initializes in-memory database with production schemas and multi-user baseline."""
     db = UnifiedDatabaseManager(":memory:")
-    with open("database/migrations/001_initial_schema.sql", encoding="utf-8") as f:
+    with open("shared/database/migrations/001_initial_schema.sql", encoding="utf-8") as f:
         sql1 = f.read()
-    with open("database/migrations/003_outbox_and_sync.sql", encoding="utf-8") as f:
+    with open("shared/database/migrations/003_outbox_and_sync.sql", encoding="utf-8") as f:
         sql3 = f.read()
 
     with db.connect() as conn:

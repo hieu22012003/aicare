@@ -1,7 +1,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from ai_core.fall_risk_detection.domain import (
+from features.fall_risk.risk_engine.domain import (
     CheckinResult,
     EventStatus,
     FallConfig,
@@ -10,7 +10,7 @@ from ai_core.fall_risk_detection.domain import (
     SafetyState,
     SignalCode,
 )
-from ai_core.fall_risk_detection.engine import (
+from features.fall_risk.risk_engine.engine import (
     CheckinRequested,
     FallEventChanged,
     FallRiskEngine,
@@ -18,9 +18,9 @@ from ai_core.fall_risk_detection.engine import (
     RiskSignalDetected,
     SkeletonClipReady,
 )
-from ai_core.shared.pose.landmarks import Landmark
-from ai_core.shared.pose.observation import Identity, Observation
-from ai_core.shared.zones import Zone, ZoneType
+from shared.vision.pose.landmarks import Landmark
+from shared.vision.pose.observation import Identity, Observation
+from shared.vision.zones import Zone, ZoneType
 from tests.ai_features.synth import landmarks
 
 TZ = ZoneInfo("Asia/Ho_Chi_Minh")

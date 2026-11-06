@@ -9,7 +9,7 @@ sys.path.insert(0,str(ROOT))
 
 
 def main():
-    root=ROOT/'reports/fall_detection'
+    root=ROOT/'docs/test-reports/fall_detection'
     rows=[]
     for phase in ('baseline','candidate'):
         for folder in sorted(root.glob(phase+'_*')):

@@ -17,10 +17,10 @@ if sys.stdout and hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from web.api_router import ApiRouter
-from web.auth import AuthService
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from features.web_portal.api_router import ApiRouter
+from features.web_portal.auth import AuthService
 
 def run_prescription_flow_verification():
     print("==================================================================")

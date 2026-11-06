@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from ai_core.posture_activity_monitoring.domain import Identity, Observation
-from ai_core.shared.pose.landmarks import NUM_LANDMARKS, Landmark
+from features.posture_activity.domain import Identity, Observation
+from shared.vision.pose.landmarks import NUM_LANDMARKS, Landmark
 
 # (shoulder, hip, knee, ankle) midpoints for each pose, normalized coordinates.
 POSES: dict[str, tuple[tuple[float, float], ...]] = {

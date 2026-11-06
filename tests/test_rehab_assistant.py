@@ -18,24 +18,24 @@ import numpy as np
 
 # Ensure headless execution & environment
 import tempfile
-import config
+from shared import config
 os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
 os.environ.setdefault("AI_CARE_DISABLE_TTS", "1")
 os.environ.setdefault("MPLCONFIGDIR", os.path.join(tempfile.gettempdir(), "matplotlib-cache"))
 
-from core.camera_manager import CameraManager
-from adapters.face_adapter import FaceAdapter
-from adapters.emotion_adapter import EmotionAdapter
-from adapters.rehabilitation_adapter import RehabilitationAdapter
-from modules.rehabilitation.rehab_engine import (
+from shared.camera.camera_manager import CameraManager
+from features.face_monitoring.face_adapter import FaceAdapter
+from features.emotion.emotion_adapter import EmotionAdapter
+from features.exercise_rehab.rehabilitation_adapter import RehabilitationAdapter
+from features.exercise_rehab.rehab_engine import (
     RehabilitationEngine,
     ArmRaiseTracker,
     SitToStandTracker,
     MarchingTracker,
     ExerciseMetrics,
 )
-from app.router import DashboardRouter
-from services.state_service import StateService
+from apps.desktop.router import DashboardRouter
+from shared.services.state_service import StateService
 
 
 class TestCameraManager(unittest.TestCase):
@@ -169,7 +169,7 @@ class TestEmotionAdapter(unittest.TestCase):
         self.assertGreater(probs_sad[2], 0.70)
 
     def test_vietnamese_drawing(self):
-        from core.drawing_utils import draw_vietnamese_text, draw_pill_badge, get_text_size
+        from shared.camera.drawing_utils import draw_vietnamese_text, draw_pill_badge, get_text_size
         frame = np.zeros((480, 640, 3), dtype=np.uint8)
         draw_vietnamese_text(frame, "Nâng tay qua đầu (Arm Raise)", (20, 20), font_size=18)
         draw_pill_badge(frame, "Tâm trạng: Bình thường (92.5%)", (600, 20), font_size=16)

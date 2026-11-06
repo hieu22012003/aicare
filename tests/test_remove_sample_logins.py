@@ -4,7 +4,7 @@ import sqlite3
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATIONS = ROOT/'database/migrations'
+MIGRATIONS = ROOT/'shared/database/migrations'
 
 
 def test_fresh_install_has_no_sample_logins():

@@ -13,13 +13,13 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 os.environ['QT_QPA_PLATFORM']='offscreen'
 import mediapipe
-import config
+from shared import config
 
 
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--pattern',default='test_fall_pipeline_v2.py')
-    parser.add_argument('--output',default='reports/fall_detection/checks')
+    parser.add_argument('--output',default='docs/test-reports/fall_detection/checks')
     args=parser.parse_args()
     out=Path(args.output); out.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='fall_checks_') as tmp:

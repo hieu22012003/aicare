@@ -8,10 +8,10 @@ from pathlib import Path
 from PyQt5.QtWidgets import QApplication
 import sys
 
-from database.connection import UnifiedDatabaseManager
-from web.auth import AuthService
-from web.api_router import ApiRouter
-from app.today_todo_widget import TodayTodoWidget
+from shared.database.connection import UnifiedDatabaseManager
+from features.web_portal.auth import AuthService
+from features.web_portal.api_router import ApiRouter
+from apps.desktop.today_todo_widget import TodayTodoWidget
 
 
 class CaregiverVitalsEntryTests(unittest.TestCase):
@@ -135,7 +135,7 @@ class CaregiverVitalsEntryTests(unittest.TestCase):
         self.assertTrue(any("mmHg" in t for t in texts))
 
     def test_caregiver_portal_html_contains_vitals_tab(self):
-        html_path = Path("web/templates/portal_caregiver.html")
+        html_path = Path("features/web_portal/templates/portal_caregiver.html")
         self.assertTrue(html_path.exists())
         content = html_path.read_text(encoding="utf-8")
         self.assertIn("switchTab('vitals-entry')", content)

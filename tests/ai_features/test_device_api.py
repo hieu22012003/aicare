@@ -4,10 +4,10 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from ai_core.integration import device_api
-from ai_core.integration.device_api import BackendAIService, handle_device_route, set_service
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
+from shared.ai_runtime import device_api
+from shared.ai_runtime.device_api import BackendAIService, handle_device_route, set_service
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
 from tests.ai_features.synth import landmarks
 
 PID = "pat_dev_1"

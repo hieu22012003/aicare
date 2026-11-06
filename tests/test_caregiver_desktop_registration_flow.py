@@ -16,13 +16,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from adapters.face_adapter import FaceAdapter
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from services.patient_sync_service import sync_single_patient
-from web.api_router import ApiRouter
-from web.auth import AuthService
-from services.credential_security import verify_password
+from features.face_monitoring.face_adapter import FaceAdapter
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from shared.services.patient_sync_service import sync_single_patient
+from features.web_portal.api_router import ApiRouter
+from features.web_portal.auth import AuthService
+from shared.services.credential_security import verify_password
 
 
 class TestCaregiverDesktopRegistrationFlow(unittest.TestCase):

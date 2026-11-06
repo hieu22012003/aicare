@@ -20,7 +20,7 @@ except Exception:
     pass
 
 from PyQt5.QtWidgets import QApplication
-from app.dashboard import DashboardWindow, STYLESHEET
+from apps.desktop.dashboard import DashboardWindow, STYLESHEET
 
 app = QApplication(sys.argv)
 app.setStyleSheet(STYLESHEET)

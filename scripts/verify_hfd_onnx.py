@@ -10,7 +10,7 @@ import torch
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument('--weights',default='modules/fall/models/shufflenetv2k16.pkl')
+    parser.add_argument('--weights',default='features/fall_risk/hfd_model/models/shufflenetv2k16.pkl')
     parser.add_argument('--size',default='513x289')
     parser.add_argument('--output',required=True)
     args=parser.parse_args();width,height=map(int,args.size.split('x'))

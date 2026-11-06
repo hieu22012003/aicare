@@ -8,9 +8,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from services.credential_security import hash_password, LEGACY_DEFAULTS
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from shared.services.credential_security import hash_password, LEGACY_DEFAULTS
 
 
 def main():

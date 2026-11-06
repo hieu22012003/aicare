@@ -13,17 +13,17 @@ os.environ['EMAIL_ENABLED'] = 'false'
 from PyQt5.QtWidgets import QApplication
 from http.server import ThreadingHTTPServer
 import requests
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from web.server import HealthcareHttpHandler
-from web.api_router import ApiRouter
-from web.auth import AuthService
-from services.transcript_intent.context import read_state
-from services.transcript_intent.client import GeminiIntentClient
-from services.transcript_intent.coordinator import VoiceRequestCoordinator
-from services.transcript_intent.schema import proposal, Decision
-from services.transcript_intent.registry import Intent
-from services.local_voice.dispatcher import CommandDispatcher
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from features.web_portal.server import HealthcareHttpHandler
+from features.web_portal.api_router import ApiRouter
+from features.web_portal.auth import AuthService
+from features.voice_assistant.transcript_intent.context import read_state
+from features.voice_assistant.transcript_intent.client import GeminiIntentClient
+from features.voice_assistant.transcript_intent.coordinator import VoiceRequestCoordinator
+from features.voice_assistant.transcript_intent.schema import proposal, Decision
+from features.voice_assistant.transcript_intent.registry import Intent
+from features.voice_assistant.local_voice.dispatcher import CommandDispatcher
 
 
 def main():
@@ -76,7 +76,7 @@ def main():
                       authentication_validation_and_size_checks=True, clinical_db_unchanged=True,
                       no_email=True, gemini_calls=0, microphone_tested=False,
                       latency_ms=round((time.monotonic()-started)*1000))
-        Path('reports/gemini_intent/http-smoke.json').write_text(json.dumps(report,indent=2))
+        Path('docs/test-reports/gemini_intent/http-smoke.json').write_text(json.dumps(report,indent=2))
         print(json.dumps(report,indent=2))
     finally:
         coordinator.shutdown()

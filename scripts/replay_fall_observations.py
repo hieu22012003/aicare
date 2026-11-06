@@ -8,7 +8,7 @@ import mediapipe  # Windows DLL initialization before importing torch in HFD mod
 import numpy as np
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-from core.fall_pipeline import FallConfig, FallPipeline, FramePacket, PersonObservation
+from features.fall_risk.pipeline.fall_pipeline import FallConfig, FallPipeline, FramePacket, PersonObservation
 
 
 class EmptyBackend:
@@ -18,7 +18,7 @@ class EmptyBackend:
 def replay(path,config,classifier=False):
     core=FallPipeline(EmptyBackend(),config,run_id='ablation')
     if classifier:
-        from modules.fall.hfd_classifier import HfdClassifier
+        from features.fall_risk.hfd_model.hfd_classifier import HfdClassifier
         core.classifier=HfdClassifier(max_gap=config.max_observation_gap)
     trace=[]
     with Path(path).open(encoding='utf-8') as stream:

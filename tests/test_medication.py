@@ -8,8 +8,8 @@ from pathlib import Path
 from datetime import datetime, date, timedelta, timezone
 from unittest.mock import patch, MagicMock
 
-from services.medication_service import MedicationService, due_times, validate_schedule
-from services.email_service import EmailService, DeliveryResult
+from features.medication.medication_service import MedicationService, due_times, validate_schedule
+from shared.services.email_service import EmailService, DeliveryResult
 
 
 class MedicationTests(unittest.TestCase):
@@ -180,7 +180,7 @@ class MedicationTests(unittest.TestCase):
 
     def test_imported_unittest_does_not_disable_production_email(self):
         # ML packages can import unittest in a normal production process.
-        with patch.dict(os.environ,{},clear=True), patch('sys.argv',['main.py']):
+        with patch.dict(os.environ,{},clear=True), patch('sys.argv',['apps/desktop/main.py']):
             self.assertFalse(EmailService(mode='medication').network_blocked())
         with patch.dict(os.environ,{},clear=True), patch('sys.argv',['unittest/__main__.py']):
             self.assertTrue(EmailService(mode='medication').network_blocked())

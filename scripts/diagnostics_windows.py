@@ -165,7 +165,7 @@ def run_diagnostics() -> int:
     # 6. Kiểm tra Cơ sở dữ liệu & Cổng Web
     log("\n[6/6] KIỂM TRA CƠ SỞ DỮ LIỆU & MÁY CHỦ WEB")
     try:
-        from database.connection import UnifiedDatabaseManager
+        from shared.database.connection import UnifiedDatabaseManager
         db = UnifiedDatabaseManager()
         with db.connect() as conn:
             wal = conn.fetchone("PRAGMA journal_mode")

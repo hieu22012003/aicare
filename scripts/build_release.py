@@ -1,6 +1,6 @@
 """
 Automated Windows Release Packager for AI Rehabilitation & Safety Assistant.
-Stages allowlisted files into AICareDemo/ root, injects RELEASE_MANIFEST.json,
+Stages allowlisted files into AICareDemo/ root, injects deploy/windows/RELEASE_MANIFEST.json,
 builds the compact distribution ZIP into release/, computes SHA-256 checksums,
 and verifies zip integrity and extractability.
 """
@@ -78,8 +78,8 @@ def should_include_file(rel_path: str, size: int) -> bool:
     
     # Root files allowlist
     root_allow = {
-        "main.py", "config.py", "CHECK_SYSTEM.py", "Setup.cmd", "Start Demo.cmd",
-        "Stop Demo.cmd", "Diagnostics.cmd", "Reset Demo.cmd", "README_WINDOWS_VI.md",
+        "apps/desktop/main.py", "shared/config.py", "scripts/check_system.py", "deploy/windows/Setup.cmd", "deploy/windows/Start Demo.cmd",
+        "deploy/windows/Stop Demo.cmd", "deploy/windows/Diagnostics.cmd", "deploy/windows/Reset Demo.cmd", "deploy/windows/README_WINDOWS_VI.md",
         "requirements-windows.txt", "requirements.txt", ".env.example", "LICENSE"
     }
     if len(parts) == 1 and parts[0] in root_allow:
@@ -144,8 +144,8 @@ def build_release_package() -> int:
 
     print(f"      ✅ Đã sao chép {len(staged_files)} tệp tin vào thư mục đóng gói.")
 
-    # 2. Tạo RELEASE_MANIFEST.json
-    print("\n[2/5] Đang tạo bảng kê phát hành (RELEASE_MANIFEST.json)...")
+    # 2. Tạo deploy/windows/RELEASE_MANIFEST.json
+    print("\n[2/5] Đang tạo bảng kê phát hành (deploy/windows/RELEASE_MANIFEST.json)...")
     file_hashes = {}
     for rel, dest in staged_files:
         file_hashes[rel] = {
@@ -160,16 +160,16 @@ def build_release_package() -> int:
         "platform": "Windows 10/11 x64",
         "python_runtime": "Python 3.12 (64-bit)",
         "build_timestamp": datetime.now(timezone.utc).isoformat(),
-        "network_requirements": "Cần Internet trong lần chạy Setup.cmd đầu tiên; Hoạt động 100% Offline sau đó",
+        "network_requirements": "Cần Internet trong lần chạy deploy/windows/Setup.cmd đầu tiên; Hoạt động 100% Offline sau đó",
         "validation_status": "WINDOWS_VERIFIED (Kiểm chứng trực tiếp trên Windows 11 x64: Camera, Micro, CSDL WAL, Web Server, PyQt5 Desktop và 569/571 ca kiểm thử đạt)",
         "package_type": "Portable Distribution for Windows x64",
         "total_files": len(staged_files),
         "files": file_hashes
     }
-    manifest_path = package_root / "RELEASE_MANIFEST.json"
+    manifest_path = package_root / "deploy/windows/RELEASE_MANIFEST.json"
     with open(manifest_path, "r" if False else "w", encoding="utf-8") as f:
         json.dump(manifest_data, f, indent=2, ensure_ascii=False)
-    print(f"      ✅ Đã tạo RELEASE_MANIFEST.json ({len(file_hashes)} tệp tin được xác minh).")
+    print(f"      ✅ Đã tạo deploy/windows/RELEASE_MANIFEST.json ({len(file_hashes)} tệp tin được xác minh).")
 
     # 3. Tạo file nén ZIP
     zip_name = f"AICareDemo-v{VERSION}-windows-x64.zip"
@@ -214,9 +214,9 @@ def build_release_package() -> int:
     try:
         with zipfile.ZipFile(zip_path, "r") as test_zip:
             test_zip.extractall(verify_dir)
-            extracted_manifest = verify_dir / "AICareDemo" / "RELEASE_MANIFEST.json"
-            extracted_setup = verify_dir / "AICareDemo" / "Setup.cmd"
-            extracted_start = verify_dir / "AICareDemo" / "Start Demo.cmd"
+            extracted_manifest = verify_dir / "AICareDemo" / "deploy/windows/RELEASE_MANIFEST.json"
+            extracted_setup = verify_dir / "AICareDemo" / "deploy/windows/Setup.cmd"
+            extracted_start = verify_dir / "AICareDemo" / "deploy/windows/Start Demo.cmd"
             if not (extracted_manifest.exists() and extracted_setup.exists() and extracted_start.exists()):
                 raise RuntimeError("Thiếu các tệp khởi chạy cốt lõi trong bản giải nén thử nghiệm!")
         print(f"      ✅ Bản nén giải nén hoàn hảo, cấu trúc gốc 'AICareDemo/' hợp lệ.")

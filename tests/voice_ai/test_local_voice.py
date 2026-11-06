@@ -4,11 +4,11 @@ import queue
 from types import SimpleNamespace
 from unittest.mock import Mock
 import pytest
-from services.local_voice.intents import resolve_intent
-from services.local_voice.controller import VoiceSessionController
-from services.local_voice.dispatcher import CommandDispatcher
-from services.local_voice.engine import LocalSttEngine
-from services.local_voice.config import VoiceConfig
+from features.voice_assistant.local_voice.intents import resolve_intent
+from features.voice_assistant.local_voice.controller import VoiceSessionController
+from features.voice_assistant.local_voice.dispatcher import CommandDispatcher
+from features.voice_assistant.local_voice.engine import LocalSttEngine
+from features.voice_assistant.local_voice.config import VoiceConfig
 
 
 @pytest.mark.parametrize('text', [
@@ -132,10 +132,10 @@ def test_transcript_cannot_complete_rehabilitation():
 
 @pytest.fixture
 def care_db(tmp_path):
-    from database.connection import UnifiedDatabaseManager
-    from database.migrator import Migrator
-    from database.importer import DataImporter
-    from services.elder_sync_client import ElderSyncClient
+    from shared.database.connection import UnifiedDatabaseManager
+    from shared.database.migrator import Migrator
+    from shared.database.importer import DataImporter
+    from shared.services.elder_sync_client import ElderSyncClient
     db = UnifiedDatabaseManager(':memory:')
     Migrator(db).apply_all()
     DataImporter(db).import_all()
@@ -176,8 +176,8 @@ def test_voice_shared_db_transaction_outbox_and_dedup(care_db):
         assert conn.fetchone('SELECT state FROM dose_occurrences WHERE occurrence_id=?', (dose['occurrence_id'],))['state'] == 'CONFIRMED'
         assert conn.fetchone("SELECT COUNT(*) n FROM dose_events WHERE idempotency_key='voice_test1'")['n'] == 1
         assert conn.fetchone("SELECT COUNT(*) n FROM outbox_events WHERE source='voice'")['n'] == 1
-    from web.api_router import ApiRouter
-    from web.auth import AuthService
+    from features.web_portal.api_router import ApiRouter
+    from features.web_portal.auth import AuthService
     router = ApiRouter(db, AuthService(db))
     code, body = router._get_medication_doses('patient_001', {'date': dose['local_scheduled_time'][:10]})
     assert code == 200
@@ -203,7 +203,7 @@ def test_voice_version_conflict_offline_and_restart_never_replay(care_db):
 
 def test_tts_cannot_restart_during_capture(monkeypatch):
     monkeypatch.delenv('AI_CARE_DISABLE_TTS', raising=False)
-    from services.voice_ai.audio.tts_player import TTSPlaybackCoordinator
+    from features.voice_assistant.voice_ai.audio.tts_player import TTSPlaybackCoordinator
     from unittest.mock import patch
     tts = TTSPlaybackCoordinator()
     with patch('subprocess.Popen') as popen:
@@ -218,7 +218,7 @@ def test_tts_cannot_restart_during_capture(monkeypatch):
 def test_recorder_hardware_sample_rate_resampling_bounded_and_close(monkeypatch):
     import sys
     import numpy as np
-    from services.local_voice.recorder import AudioRecorder
+    from features.voice_assistant.local_voice.recorder import AudioRecorder
     streams = []
     class Stream:
         def __init__(self, **kwargs):
@@ -246,7 +246,7 @@ def test_recorder_hardware_sample_rate_resampling_bounded_and_close(monkeypatch)
 
 def test_recorder_no_device_fails_without_synthetic_audio(monkeypatch):
     import sys
-    from services.local_voice.recorder import AudioRecorder
+    from features.voice_assistant.local_voice.recorder import AudioRecorder
     def fail(**_):
         raise RuntimeError('No microphone')
     monkeypatch.setitem(sys.modules, 'sounddevice', SimpleNamespace(query_devices=fail))
@@ -259,16 +259,16 @@ def test_recorder_no_device_fails_without_synthetic_audio(monkeypatch):
 
 def test_legacy_web_voice_disabled_even_when_local_flag_enabled(monkeypatch):
     monkeypatch.setenv('VOICE_AI_ENABLED', 'true')
-    from web.api_router import ApiRouter
-    from web.auth import AuthService
-    from database.connection import UnifiedDatabaseManager
+    from features.web_portal.api_router import ApiRouter
+    from features.web_portal.auth import AuthService
+    from shared.database.connection import UnifiedDatabaseManager
     db = UnifiedDatabaseManager(':memory:')
     router = ApiRouter(db, AuthService(db))
     assert router.orchestrator is None
 
 
 def test_rehab_service_rechecks_plan_version_without_voice_completion(care_db):
-    from modules.rehabilitation.rehab_session_adapter import RehabSessionAdapter
+    from features.exercise_rehab.rehab_session_adapter import RehabSessionAdapter
     db, _, _ = care_db
     adapter = RehabSessionAdapter(db)
     with db.connect() as conn:
@@ -281,7 +281,7 @@ def test_rehab_service_rechecks_plan_version_without_voice_completion(care_db):
 def test_frozen_tts_uses_explicit_child_entrypoint(monkeypatch):
     import sys
     from unittest.mock import patch
-    from services.voice_ai.audio.tts_player import TTSPlaybackCoordinator
+    from features.voice_assistant.voice_ai.audio.tts_player import TTSPlaybackCoordinator
     monkeypatch.delenv('AI_CARE_DISABLE_TTS', raising=False)
     monkeypatch.setattr(sys, 'frozen', True, raising=False)
     with patch('subprocess.Popen') as popen:

@@ -5,16 +5,16 @@ from pathlib import Path
 import pytest
 from unittest.mock import patch
 
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from services.credential_security import (
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from shared.services.credential_security import (
     DISABLED, hash_password, verify_password, migrate_database_passwords,
     protect_profile_credentials,
 )
-from services.patient_sync_service import sync_single_patient, sync_all_patient_profiles
-from web.auth import AuthService
-from web.api_router import ApiRouter
-from web.server import HealthcareWebServer
+from shared.services.patient_sync_service import sync_single_patient, sync_all_patient_profiles
+from features.web_portal.auth import AuthService
+from features.web_portal.api_router import ApiRouter
+from features.web_portal.server import HealthcareWebServer
 
 PASSWORD = 'Synthetic-Only-Passphrase-42!'
 
@@ -133,7 +133,7 @@ def test_legacy_profile_files_are_rewritten_without_cleartext_credentials(env, t
 
 
 def test_login_page_contains_no_quick_accounts_or_default_credentials():
-    html = (Path(__file__).resolve().parents[1] / 'web/templates/login.html').read_text(encoding='utf-8')
+    html = (Path(__file__).resolve().parents[1] / 'features/web_portal/templates/login.html').read_text(encoding='utf-8')
     assert 'quick-accounts' not in html
     assert 'admin123' not in html and '123456' not in html
     assert 'demoAccounts' not in html
@@ -172,7 +172,7 @@ def test_admin_cannot_silently_create_account_with_default_password(env, kind):
 
 def test_real_http_login_and_anonymous_routes_do_not_expose_credentials(env):
     db, _, _ = env
-    with patch('services.patient_sync_service.sync_all_patient_profiles'):
+    with patch('shared.services.patient_sync_service.sync_all_patient_profiles'):
         server = HealthcareWebServer(db, port=0)
     server.start()
     connection = http.client.HTTPConnection('127.0.0.1', server.port, timeout=5)

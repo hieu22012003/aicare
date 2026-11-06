@@ -3,8 +3,8 @@ from unittest.mock import Mock
 import unicodedata
 import numpy as np
 import pytest
-from services.local_voice.config import VoiceConfig
-from services.local_voice.engine import LocalSttEngine, prepare_audio
+from features.voice_assistant.local_voice.config import VoiceConfig
+from features.voice_assistant.local_voice.engine import LocalSttEngine, prepare_audio
 
 
 def engine_with_segments(segments):
@@ -89,7 +89,7 @@ def test_missing_model_is_actionable(tmp_path):
 
 def test_model_loaded_with_cpu_and_decoder_configuration(tmp_path, monkeypatch):
     import sys
-    from services.local_voice.engine import MODEL_FILES
+    from features.voice_assistant.local_voice.engine import MODEL_FILES
     for name in MODEL_FILES:
         (tmp_path/name).touch()
     factory=Mock()

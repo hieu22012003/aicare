@@ -13,7 +13,7 @@ os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 with tempfile.TemporaryDirectory(prefix='ai-care-verify-') as data:
     os.environ['AI_CARE_TEST_DATA_DIR'] = data
     # Native ML libraries must initialize before Qt on Windows.
-    import config
+    from shared import config
     import unittest
     import smtplib
     from unittest.mock import patch

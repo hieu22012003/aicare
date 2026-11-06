@@ -18,7 +18,7 @@ import mediapipe  # Load bundled Windows DLLs before OpenCV/psutil.
 import cv2
 import numpy as np
 import psutil
-from core.frame_source import VideoFileFrameSource
+from shared.camera.frame_source import VideoFileFrameSource
 
 
 def digest(path):
@@ -36,36 +36,36 @@ def main():
     p.add_argument("--repeats", type=int, default=5)
     p.add_argument("--legacy", action="store_true")
     p.add_argument('--backend', choices=['auto','hog','yolo','yolo-mediapipe','yolo-silhouette','onnx','hfd','hfd-pose'], default='auto')
-    p.add_argument('--weights', default='modules/fall/models/yolo11n-pose.pt')
+    p.add_argument('--weights', default='features/fall_risk/hfd_model/models/yolo11n-pose.pt')
     p.add_argument('--image-size', type=int, default=640)
     p.add_argument('--ground-truth', default=None)
-    p.add_argument("--output", default="reports/fall_detection")
+    p.add_argument("--output", default="docs/test-reports/fall_detection")
     a = p.parse_args()
     if a.legacy:
         from experiments.fall_legacy_reference import FallTestRunner
         from experiments.fall_legacy_source import VideoFileFrameSource
     else:
-        from services.fall_test_runner import FallTestRunner
-        from core.frame_source import VideoFileFrameSource
+        from features.fall_risk.fall_test_runner import FallTestRunner
+        from shared.camera.frame_source import VideoFileFrameSource
     cv2.setNumThreads(1)
     cv2.setRNGSeed(0)
     import torch
     torch.set_num_threads(4)
-    code = {str(f.relative_to(ROOT)): digest(f) for folder in ("core", "modules/fall", "services", "adapters", "app")
+    code = {str(f.relative_to(ROOT)): digest(f) for folder in ("core", "features/fall_risk/hfd_model", "services", "adapters", "app")
             for f in (ROOT / folder).rglob("*.py")}
     code['scripts/hfd_pose_worker.py']=digest(ROOT/'scripts/hfd_pose_worker.py')
-    config_hash = digest(ROOT / "config.py")
+    config_hash = digest(ROOT / "shared/config.py")
     for index in range(a.repeats):
         run = Path(a.output) / f"{a.phase}_{index+1:02d}"
         run.mkdir(parents=True, exist_ok=False)
         source = VideoFileFrameSource(a.video)
         factory = None
         if not a.legacy and a.backend != 'auto':
-            from core.fall_pipeline import PersonPoseBackend
-            from core.fall_backends import YoloPoseBackend, ForegroundAssistedBackend, OnnxPoseBackend
+            from features.fall_risk.pipeline.fall_pipeline import PersonPoseBackend
+            from features.fall_risk.pipeline.fall_backends import YoloPoseBackend, ForegroundAssistedBackend, OnnxPoseBackend
             def factory():
                 if a.backend in ('hfd','hfd-pose'):
-                    from modules.fall.hfd_pose_backend import HfdPoseBackend
+                    from features.fall_risk.hfd_model.hfd_pose_backend import HfdPoseBackend
                     backend = HfdPoseBackend()
                     backend.use_hfd_classifier = a.backend == 'hfd'
                     return backend

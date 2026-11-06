@@ -8,9 +8,9 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 import mediapipe
 import cv2
-from core.frame_source import VideoFileFrameSource
-from core.fall_pipeline import FramePacket, PersonObservation
-from core.fall_backends import ForegroundAssistedBackend
+from shared.camera.frame_source import VideoFileFrameSource
+from features.fall_risk.pipeline.fall_pipeline import FramePacket, PersonObservation
+from features.fall_risk.pipeline.fall_backends import ForegroundAssistedBackend
 
 
 class CachedBackend:

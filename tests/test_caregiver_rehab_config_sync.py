@@ -22,15 +22,15 @@ app = QApplication.instance()
 if app is None:
     app = QApplication(sys.argv)
 
-from adapters import RehabilitationAdapter
-from app.dashboard import DashboardWindow
-from app.today_todo_widget import TodayTodoWidget
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from database.importer import DataImporter
-from modules.rehabilitation.rehab_session_adapter import ensure_default_rehab_plans
-from web.api_router import ApiRouter
-from web.auth import AuthService
+from features.exercise_rehab.rehabilitation_adapter import RehabilitationAdapter
+from apps.desktop.dashboard import DashboardWindow
+from apps.desktop.today_todo_widget import TodayTodoWidget
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from shared.database.importer import DataImporter
+from features.exercise_rehab.rehab_session_adapter import ensure_default_rehab_plans
+from features.web_portal.api_router import ApiRouter
+from features.web_portal.auth import AuthService
 
 
 class TestCaregiverRehabConfigSync(unittest.TestCase):

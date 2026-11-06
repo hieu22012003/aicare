@@ -3,8 +3,8 @@ import os
 from pathlib import Path
 import numpy as np
 import pytest
-from services.local_voice.config import VoiceConfig
-from services.local_voice.engine import LocalSttEngine
+from features.voice_assistant.local_voice.config import VoiceConfig
+from features.voice_assistant.local_voice.engine import LocalSttEngine
 
 
 @pytest.fixture(scope='module')

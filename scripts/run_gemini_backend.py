@@ -20,7 +20,7 @@ def main():
         parser.error('Private backend env file was not found')
     from dotenv import load_dotenv
     load_dotenv(private_file, override=False)
-    from services.transcript_intent.config import BackendConfig
+    from features.voice_assistant.transcript_intent.config import BackendConfig
     try:
         cfg = BackendConfig.from_env()
     except ValueError:
@@ -40,9 +40,9 @@ def main():
         return 2
     if args.check_config:
         return 0
-    from database.connection import UnifiedDatabaseManager
-    from database.migrator import Migrator
-    from web.server import HealthcareWebServer
+    from shared.database.connection import UnifiedDatabaseManager
+    from shared.database.migrator import Migrator
+    from features.web_portal.server import HealthcareWebServer
     db = UnifiedDatabaseManager()
     Migrator(db).apply_all()
     HealthcareWebServer(db, args.host, args.port).start(block=True)

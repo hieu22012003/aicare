@@ -3,13 +3,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from services.patient_sync_service import sync_single_patient
-from services.outbox_relay import OutboxRelayService
-from web.auth import AuthService
-from web.sse_hub import SSEHub
-from web.server import HealthcareHttpHandler, HealthcareWebServer
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from shared.services.patient_sync_service import sync_single_patient
+from shared.services.outbox_relay import OutboxRelayService
+from features.web_portal.auth import AuthService
+from features.web_portal.sse_hub import SSEHub
+from features.web_portal.server import HealthcareHttpHandler, HealthcareWebServer
 
 
 @pytest.fixture
@@ -41,12 +41,12 @@ def test_registration_relay_delivers_only_to_authorized_clients(db):
     hub = SSEHub()
     admin = hub.register_client('user_admin_001', 'admin')
     unrelated = hub.register_client('unrelated-user', 'caregiver')
-    with patch('web.sse_hub.sse_hub', hub):
+    with patch('features.web_portal.sse_hub.sse_hub', hub):
         pid = sync_single_patient(db, profile())
     assert admin.queue.empty() and unrelated.queue.empty()
     owner = hub.register_client('user_care_987', 'caregiver')
     relay = OutboxRelayService(db, AuthService(db))
-    with patch('services.outbox_relay.sse_hub', hub):
+    with patch('shared.services.outbox_relay.sse_hub', hub):
         assert relay.process_pending_events() >= 2
     assert not owner.queue.empty() and not admin.queue.empty()
     assert unrelated.queue.empty()
@@ -56,7 +56,7 @@ def test_registration_relay_delivers_only_to_authorized_clients(db):
 
 
 def test_ephemeral_port_is_usable(db):
-    with patch('services.patient_sync_service.sync_all_patient_profiles'):
+    with patch('shared.services.patient_sync_service.sync_all_patient_profiles'):
         server = HealthcareWebServer(db, port=0)
     server.start()
     try:
@@ -86,11 +86,11 @@ def test_unexpected_http_failure_still_surfaces():
 
 
 def test_windows_busy_port_falls_back(db):
-    with patch('services.patient_sync_service.sync_all_patient_profiles'):
+    with patch('shared.services.patient_sync_service.sync_all_patient_profiles'):
         server = HealthcareWebServer(db, port=8080)
     server.outbox_relay = MagicMock()
     httpd = MagicMock(server_port=8081)
-    with patch('web.server.ThreadingHTTPServer', side_effect=[OSError(10048, 'busy'), httpd]) as factory:
+    with patch('features.web_portal.server.ThreadingHTTPServer', side_effect=[OSError(10048, 'busy'), httpd]) as factory:
         server.start()
         assert [call.args[0] for call in factory.call_args_list] == [('127.0.0.1', 8080), ('127.0.0.1', 8081)]
         assert server.port == 8081

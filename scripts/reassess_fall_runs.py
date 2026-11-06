@@ -9,14 +9,14 @@ import importlib.metadata
 import cv2
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-from core.fall_evaluation import evaluate
-from core.fall_pipeline import FallConfig
+from features.fall_risk.pipeline.fall_evaluation import evaluate
+from features.fall_risk.pipeline.fall_pipeline import FallConfig
 
 
 def sha(path): return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-root=ROOT/'reports/fall_detection'
+root=ROOT/'docs/test-reports/fall_detection'
 gt_path=ROOT/'data/video_annotations/elderly_fall_v2.json'
 gt=json.loads(gt_path.read_text(encoding='utf-8'))
 for phase in ('baseline','candidate'):
@@ -32,7 +32,7 @@ for phase in ('baseline','candidate'):
         trace=json.loads(trace_files[0].read_text(encoding='utf-8')) if trace_files else None
         result=evaluate(events,gt,manifest['video_sha256'],trace)
         result['provenance']=dict(events_sha256=sha(folder/'events.json'),ground_truth_sha256=sha(gt_path),
-                                  evaluator_sha256=sha(ROOT/'core/fall_evaluation.py'),annotation_status=gt['annotation_status'])
+                                  evaluator_sha256=sha(ROOT/'features/fall_risk/pipeline/fall_evaluation.py'),annotation_status=gt['annotation_status'])
         target=folder/'reassessment'
         target.mkdir(exist_ok=True)
         for name,value in dict(metrics=result['metrics'],matches=result['eval_details'],evaluation=result,ground_truth=gt).items():

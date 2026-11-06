@@ -7,12 +7,12 @@ from pathlib import Path
 import sys
 import time
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from services.transcript_intent.synthetic_dataset import load_cases
-from services.transcript_intent.policy import local_proposal, privacy_eligible, validate_proposal
-from services.transcript_intent.schema import proposal
-from services.transcript_intent.registry import Intent
-from services.transcript_intent.config import BackendConfig
-from services.transcript_intent.service import GeminiIntentService
+from features.voice_assistant.transcript_intent.synthetic_dataset import load_cases
+from features.voice_assistant.transcript_intent.policy import local_proposal, privacy_eligible, validate_proposal
+from features.voice_assistant.transcript_intent.schema import proposal
+from features.voice_assistant.transcript_intent.registry import Intent
+from features.voice_assistant.transcript_intent.config import BackendConfig
+from features.voice_assistant.transcript_intent.service import GeminiIntentService
 
 
 def percentile(values, q):
@@ -29,7 +29,7 @@ def main():
     parser.add_argument('--free-tier-confirmed', action='store_true')
     parser.add_argument('--project-id', default='')
     parser.add_argument('--cases', default='synth_002,synth_094,synth_086')
-    parser.add_argument('--output', default='reports/gemini_intent/offline-benchmark.json')
+    parser.add_argument('--output', default='docs/test-reports/gemini_intent/offline-benchmark.json')
     args = parser.parse_args()
     cases = load_cases()
     out_dir = Path(args.output).parent

@@ -8,17 +8,17 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 import pytest
 
-from services.voice_ai.domain.contracts import (
+from features.voice_assistant.voice_ai.domain.contracts import (
     ExecutionStatus,
     IntentPriority,
     IntentType,
     OrchestratorExecutionResult,
 )
-from services.voice_ai.orchestrator.actions import ActionType
-from services.voice_ai.orchestrator.idempotency import IdempotencyManager
-from services.voice_ai.orchestrator.router import WorkflowOrchestrator
-from services.voice_ai.safety.assistance_rules import DeterministicSafetyDetector
-from services.voice_ai.semantic.mock_provider import MockSemanticProvider
+from features.voice_assistant.voice_ai.orchestrator.actions import ActionType
+from features.voice_assistant.voice_ai.orchestrator.idempotency import IdempotencyManager
+from features.voice_assistant.voice_ai.orchestrator.router import WorkflowOrchestrator
+from features.voice_assistant.voice_ai.safety.assistance_rules import DeterministicSafetyDetector
+from features.voice_assistant.voice_ai.semantic.mock_provider import MockSemanticProvider
 
 
 class TestWorkflowOrchestrator:

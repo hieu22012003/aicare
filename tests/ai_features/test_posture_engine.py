@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from ai_core.posture_activity_monitoring.domain import (
+from features.posture_activity.domain import (
     Audience,
     Identity,
     Location,
@@ -14,7 +14,7 @@ from ai_core.posture_activity_monitoring.domain import (
     Zone,
     ZoneType,
 )
-from ai_core.posture_activity_monitoring.engine import (
+from features.posture_activity.engine import (
     DaySummaryUpdated,
     NightBedExit,
     PostureEngine,

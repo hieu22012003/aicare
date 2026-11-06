@@ -1,7 +1,7 @@
 import pytest
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from services.emotion_summary_service import EmotionSummaryService
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from features.emotion.emotion_summary_service import EmotionSummaryService
 
 P='patient_001'
 T=1800000000
@@ -92,8 +92,8 @@ def test_empty_windows_and_isolation(env):
     assert s.list_summaries('patient_002')==[]
 
 def test_api_and_outbox_separate_alerts(env):
-    from web.api_router import ApiRouter
-    from web.auth import AuthService
+    from features.web_portal.api_router import ApiRouter
+    from features.web_portal.auth import AuthService
     db,s=env
     feed(s,'Sad',0,300)
     auth=AuthService(db)

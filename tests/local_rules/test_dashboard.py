@@ -1,9 +1,9 @@
 import pytest
 from test_requests import setup,create
-from web.auth import AuthService
-from web.api_router import ApiRouter
-from web.sse_hub import sse_hub
-from services.outbox_relay import OutboxRelayService
+from features.web_portal.auth import AuthService
+from features.web_portal.api_router import ApiRouter
+from features.web_portal.sse_hub import sse_hub
+from shared.services.outbox_relay import OutboxRelayService
 
 
 def test_api_recipient_filter_real_ack_and_resolve(setup):

@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 import tempfile
 
-from services.state_service import StateService
+from shared.services.state_service import StateService
 
 
 class TestStateService(unittest.TestCase):

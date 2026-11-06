@@ -4,13 +4,13 @@ from datetime import datetime, timezone
 
 import pytest
 
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from services.elder_sync_client import ElderSyncClient
-from services.outbox_relay import OutboxRelayService
-from web.api_router import ApiRouter
-from web.auth import AuthService
-from web.sse_hub import sse_hub
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from shared.services.elder_sync_client import ElderSyncClient
+from shared.services.outbox_relay import OutboxRelayService
+from features.web_portal.api_router import ApiRouter
+from features.web_portal.auth import AuthService
+from features.web_portal.sse_hub import sse_hub
 
 
 @pytest.fixture
@@ -125,7 +125,7 @@ def test_saved_vitals_emit_refresh_signal_to_both_authorized_portals(env):
 
 def test_elder_widget_refresh_renders_new_measurement(env):
     from PyQt5.QtWidgets import QApplication
-    from app.today_todo_widget import TodayTodoWidget
+    from apps.desktop.today_todo_widget import TodayTodoWidget
     db, router, tokens, tmp_path = env
     app = QApplication.instance() or QApplication([])
     widget = TodayTodoWidget(db, sync_client=ElderSyncClient(db, queue_dir=tmp_path / 'queue'))

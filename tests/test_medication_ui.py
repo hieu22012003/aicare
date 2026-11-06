@@ -10,11 +10,11 @@ from unittest.mock import patch
 
 from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtGui import QFont, QFontDatabase
-from app.medication_panel import MedicationPanel, ScheduleDialog
-from services.medication_service import MedicationService
-from services.medication_migration import archive_legacy
-from services.user_service import UserService
-from services.email_service import EmailService
+from apps.desktop.medication_panel import MedicationPanel, ScheduleDialog
+from features.medication.medication_service import MedicationService
+from features.medication.medication_migration import archive_legacy
+from shared.services.user_service import UserService
+from shared.services.email_service import EmailService
 
 
 class MedicationUITests(unittest.TestCase):

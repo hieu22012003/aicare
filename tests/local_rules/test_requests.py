@@ -1,9 +1,9 @@
 from types import SimpleNamespace
 import pytest
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from services.local_rules.requests import RequestService
-from services.local_rules.engine import IntentEngine
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from features.voice_assistant.local_rules.requests import RequestService
+from features.voice_assistant.local_rules.engine import IntentEngine
 
 
 class FakeTransport:
@@ -134,7 +134,7 @@ def test_retry_backoff_and_attempt_cap_persist(setup):
 
 def test_manual_contacts_are_verified_current_duty_only(setup,monkeypatch):
     from datetime import datetime,timezone
-    monkeypatch.setattr('services.local_rules.requests.now',lambda:datetime(2026,10,10,6,tzinfo=timezone.utc))
+    monkeypatch.setattr('features.voice_assistant.local_rules.requests.now',lambda:datetime(2026,10,10,6,tzinfo=timezone.utc))
     db,t,s=setup
     with db.connect() as c:
         for cid,verified,start,end in [('all',1,'00:00','23:59'),('demo',0,'00:00','23:59'),('none',1,'00:00','00:00')]:

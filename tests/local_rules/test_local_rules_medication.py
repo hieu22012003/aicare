@@ -2,8 +2,8 @@ import copy
 from datetime import datetime,timedelta,timezone
 from test_desktop import desktop,utterance,wait
 from test_requests import setup
-from services.elder_sync_client import ElderSyncClient
-from services.transcript_intent.context import read_state
+from shared.services.elder_sync_client import ElderSyncClient
+from features.voice_assistant.transcript_intent.context import read_state
 
 
 def bind(desktop,tmp_path):

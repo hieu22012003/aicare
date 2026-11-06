@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from services.voice_ai.domain.contracts import (
+from features.voice_assistant.voice_ai.domain.contracts import (
     IntentPriority,
     IntentType,
     RedFlagSeverity,

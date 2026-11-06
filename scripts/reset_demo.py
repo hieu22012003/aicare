@@ -30,10 +30,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from database.connection import UnifiedDatabaseManager
-from database.migrator import Migrator
-from database.importer import DataImporter
-from database.backup_restore import BackupRestoreService
+from shared.database.connection import UnifiedDatabaseManager
+from shared.database.migrator import Migrator
+from shared.database.importer import DataImporter
+from shared.database.backup_restore import BackupRestoreService
 
 
 def reset_demo(confirm: bool = False, with_demo_patients: bool = False) -> int:
@@ -117,7 +117,7 @@ def reset_demo(confirm: bool = False, with_demo_patients: bool = False) -> int:
     print("\n==================================================================")
     print("🎉 ĐẶT LẠI DỮ LIỆU THÀNH CÔNG!")
     print(f"📁 Tệp sao lưu khôi phục: {backup_file}")
-    print("🚀 Bạn có thể khởi động lại hệ thống bằng Start Demo.cmd")
+    print("🚀 Bạn có thể khởi động lại hệ thống bằng deploy/windows/Start Demo.cmd")
     print("==================================================================\n")
     return 0
 
