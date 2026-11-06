@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0..\.."
 title "AI Care System - Setup"
 
 set "PYTHONUTF8=1"
@@ -12,7 +12,7 @@ echo   AI REHABILITATION ^& SAFETY ASSISTANT - THIET LAP HE THONG
 echo ==================================================================
 echo.
 
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\setup_windows.ps1"
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\..\scripts\setup_windows.ps1"
 set "SETUP_EXIT=%ERRORLEVEL%"
 
 if not "%SETUP_EXIT%"=="0" (

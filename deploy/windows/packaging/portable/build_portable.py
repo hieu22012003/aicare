@@ -20,8 +20,7 @@ FILES = (
     "scripts/check_system.py", "README.txt", "HUONG_DAN_SU_DUNG_KHACH_HANG.docx",
     "deploy/windows/packaging/portable/install_python.ps1", "deploy/windows/packaging/portable/setup.ps1",
 )
-TREES = ("app", "adapters", "core", "services", "features/face_monitoring/standalone",
-         "features/emotion/model", "features/exercise_rehab", "features/fall_risk/hfd_model", "docs/medication_reminder")
+TREES = ("apps", "features", "shared", "docs/medication_reminder")
 EXCLUDED_DIRS = {"__pycache__", ".git", ".venv", "archive", "HumanFallDetection"}
 EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".tmp", ".log"}
 REQUIRED = (

@@ -10,7 +10,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'releases'
-TREES = ('app', 'adapters', 'core', 'database', 'web', 'services', 'modules', 'config', 'models', 'scripts', 'packaging', 'tests')
+TREES = ('apps', 'features', 'shared', 'models', 'scripts', 'deploy', 'tests')
 ROOT_FILES = ('apps/desktop/main.py', 'shared/config.py', 'scripts/check_system.py', 'deploy/windows/Setup.cmd', 'deploy/windows/Start Demo.cmd', 'deploy/windows/Stop Demo.cmd', 'deploy/windows/Diagnostics.cmd', 'deploy/windows/Reset Demo.cmd', 'requirements-windows.txt', 'requirements.txt', '.env.example', 'deploy/windows/demo.example.env')
 SUFFIXES = {'.py', '.css', '.sql', '.html', '.json', '.md', '.txt', '.ps1', '.cmd', '.bat', '.spec', '.sh', '.png', '.svg', '.ico', '.wav', '.mp3', '.pb', '.pbtxt', '.prototxt', '.caffemodel', '.pth', '.task', '.onnx', '.pkl', '.sav', '.bin'}
 SKIP = {'__pycache__', '.git', '.venv', '.pytest_cache', 'registered_faces', 'unknown_faces', 'logs', 'backups', 'reports', 'checkpoints', 'runs'}

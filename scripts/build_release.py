@@ -70,8 +70,7 @@ def should_include_file(rel_path: str, size: int) -> bool:
     
     # Allowlist categories
     allowed_roots = (
-        "app", "core", "adapters", "database", "web", "services", "modules",
-        "config", "models", "scripts", "shared", "packaging", "tests", "docs"
+        "apps", "features", "shared", "deploy", "models", "scripts", "tests", "docs"
     )
     if parts[0] in allowed_roots:
         return True

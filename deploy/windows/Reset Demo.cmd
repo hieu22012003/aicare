@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0..\.."
 title "AI Care System - Reset Demo"
 
 set "PYTHONUTF8=1"
@@ -13,7 +13,7 @@ if exist ".venv\Scripts\python.exe" (
     set "PY_EXE=python"
 )
 
-"%PY_EXE%" "%~dp0scripts\reset_demo.py"
+"%PY_EXE%" "%~dp0..\..\scripts\reset_demo.py"
 
 echo.
 if not "%AI_RESET_NO_PAUSE%"=="1" pause

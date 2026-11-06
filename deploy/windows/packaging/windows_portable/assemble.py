@@ -24,7 +24,7 @@ def assemble(edition,output,version):
   for info in z.infolist():
    rel=Path(info.filename).relative_to('AICareDemo')
    if info.is_dir() or not rel.parts:continue
-   if rel.parts[0] not in {'app','adapters','core','database','web','services','modules','config','models'} and str(rel) not in {'apps/desktop/main.py','shared/config.py'}:continue
+   if rel.parts[0] not in {'apps','features','shared','models'} and str(rel) not in {'apps/desktop/main.py','shared/config.py'}:continue
    if any(part in {'tests','docs','__pycache__'} for part in rel.parts):continue
    if any('faster_whisper' in part.lower() or 'faster-whisper' in part.lower() or 'ctranslate2' in part.lower() for part in rel.parts):continue
    target=apps/desktop/rel;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(z.read(info.filename))
