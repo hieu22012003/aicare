@@ -72,6 +72,7 @@ Các biến môi trường:
 |---|---|
 | `AICARE_ADMIN_PASSWORD` | Mật khẩu tài khoản `admin@unifiedcare.local` (ít nhất 12 ký tự) |
 | `AICARE_BOOTSTRAP_CAREGIVER` | `email\|mật khẩu\|Họ tên\|patient_001`: tạo sẵn tài khoản người nhà khi server khởi động |
+| `AICARE_BOOTSTRAP_CLINICIAN` | `email\|mật khẩu\|Họ tên\|patient_001`: tạo sẵn tài khoản bác sĩ phụ trách bệnh nhân đó |
 | `AICARE_DEVICE_KEYS` | `khoá:patient_001` cho app tại nhà (khoá dài ít nhất 16 ký tự) |
 | `EMAIL_USERNAME`, `EMAIL_PASSWORD` | Gmail và App Password để gửi email cảnh báo |
 

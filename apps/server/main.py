@@ -14,6 +14,7 @@ Environment
     AICARE_DEVICE_KEYS      "key:patient_a|patient_b,key2:*" for /api/device (keys >= 16 characters)
     AICARE_BOOTSTRAP_CAREGIVER  "email|password|Full name|patient_id": creates that caregiver account at boot
                             if it does not exist yet (useful on hosts without a persistent disk)
+    AICARE_BOOTSTRAP_CLINICIAN  "email|password|Full name|patient_id": same for a doctor account
     EMAIL_USERNAME / EMAIL_PASSWORD / EMAIL_HOST / EMAIL_PORT   caregiver email alerts (SMTP)
 """
 
@@ -54,6 +55,36 @@ def ensure_admin_password(db) -> None:
         log.warning("No AICARE_ADMIN_PASSWORD: generated admin password (shown once): %s", generated)
 
 
+def _bootstrap_spec(var: str, default_name: str):
+    parts = [p.strip() for p in os.getenv(var, "").split("|")]
+    if len(parts) < 2 or not parts[0] or not parts[1]:
+        return None
+    name = parts[2] if len(parts) > 2 and parts[2] else default_name
+    patient_id = parts[3] if len(parts) > 3 and parts[3] else "patient_001"
+    if len(parts[1]) < 12:
+        log.error("%s: password must have at least 12 characters; account not created", var)
+        return None
+    return parts[0].lower(), parts[1], name, patient_id
+
+
+def ensure_bootstrap_clinician(db) -> None:
+    spec = _bootstrap_spec("AICARE_BOOTSTRAP_CLINICIAN", "Bác sĩ")
+    if not spec:
+        return
+    email, password, name, patient_id = spec
+    if db.fetchone("SELECT 1 FROM users WHERE LOWER(email)=?", (email,)):
+        return
+    from features.web_portal.api_router import ApiRouter
+    from features.web_portal.auth import AuthService
+
+    code, res = ApiRouter(db, AuthService(db))._admin_create_doctor(
+        {"full_name": name, "email": email, "password": password, "patient_ids": [patient_id]}, "user_admin_001")
+    if code == 201:
+        log.info("Clinician account %s created for %s", email, patient_id)
+    else:
+        log.error("Could not create clinician %s: %s", email, res.get("error"))
+
+
 def ensure_bootstrap_caregiver(db) -> None:
     raw = os.getenv("AICARE_BOOTSTRAP_CAREGIVER", "")
     parts = [p.strip() for p in raw.split("|")]
@@ -91,6 +122,7 @@ def main() -> None:
     log.info("Database %s ready (%d migrations checked)", db.db_path, len(applied))
     ensure_admin_password(db)
     ensure_bootstrap_caregiver(db)
+    ensure_bootstrap_clinician(db)
 
     ai = BackendAIService(db)
     set_service(ai)

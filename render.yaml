@@ -24,6 +24,8 @@ services:
         sync: false
       - key: AICARE_BOOTSTRAP_CAREGIVER
         sync: false
+      - key: AICARE_BOOTSTRAP_CLINICIAN
+        sync: false
       - key: AICARE_DEVICE_KEYS
         sync: false
       - key: EMAIL_USERNAME
