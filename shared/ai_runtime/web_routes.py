@@ -5,6 +5,7 @@ desktop worker). Patient access ('view') is already checked by ApiRouter; writes
 'edit_schedule', like other care-plan settings.
 
     GET  ai                         overview: posture, fall events, risk signals, objects, medication evidence
+    GET  ai/daily?date=YYYY-MM-DD   home page: profile, current state, today's timeline, 24 h stats, alert history
     GET  ai/objects/where?q=...     "kính của bà ở đâu?" answered from the last sightings
     GET  ai/settings/{feature}      posture | fall | objects | medication
     PUT  ai/settings/{feature}      validated with the same pydantic models the worker uses
@@ -33,6 +34,15 @@ def handle_ai_route(db, auth, method: str, rest: list[str], query: dict, body: d
 
     if method == "GET" and not rest:
         return 200, overview(store, patient_id)
+
+    if method == "GET" and rest == ["daily"]:
+        from shared.ai_runtime.daily import daily_summary
+
+        day = _first(query, "date").strip() or None
+        try:
+            return 200, daily_summary(db, patient_id, day)
+        except ValueError:
+            return 400, {"error": "date phải có dạng YYYY-MM-DD"}
 
     if method == "GET" and rest == ["objects", "where"]:
         q = _first(query, "q").strip()

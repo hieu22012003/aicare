@@ -12,6 +12,8 @@ Environment
     AI_CARE_HOME            writable folder for logs/uploads                       default ./runtime
     AICARE_ADMIN_PASSWORD   sets the admin password at boot (>= 12 characters)
     AICARE_DEVICE_KEYS      "key:patient_a|patient_b,key2:*" for /api/device (keys >= 16 characters)
+    AICARE_BOOTSTRAP_CAREGIVER  "email|password|Full name|patient_id": creates that caregiver account at boot
+                            if it does not exist yet (useful on hosts without a persistent disk)
     EMAIL_USERNAME / EMAIL_PASSWORD / EMAIL_HOST / EMAIL_PORT   caregiver email alerts (SMTP)
 """
 
@@ -52,6 +54,31 @@ def ensure_admin_password(db) -> None:
         log.warning("No AICARE_ADMIN_PASSWORD: generated admin password (shown once): %s", generated)
 
 
+def ensure_bootstrap_caregiver(db) -> None:
+    raw = os.getenv("AICARE_BOOTSTRAP_CAREGIVER", "")
+    parts = [p.strip() for p in raw.split("|")]
+    if len(parts) < 2 or not parts[0] or not parts[1]:
+        return
+    email, password = parts[0].lower(), parts[1]
+    name = parts[2] if len(parts) > 2 and parts[2] else "Người nhà"
+    patient_id = parts[3] if len(parts) > 3 and parts[3] else "patient_001"
+    if len(password) < 12:
+        log.error("AICARE_BOOTSTRAP_CAREGIVER: password must have at least 12 characters; account not created")
+        return
+    if db.fetchone("SELECT 1 FROM users WHERE LOWER(email)=?", (email,)):
+        return
+    from features.web_portal.api_router import ApiRouter
+    from features.web_portal.auth import AuthService
+
+    code, res = ApiRouter(db, AuthService(db))._admin_create_caregiver(
+        {"full_name": name, "email": email, "password": password, "patient_id": patient_id,
+         "relationship_type": "Người thân", "relationship_desc": "Người thân"}, "user_admin_001")
+    if code == 201:
+        log.info("Caregiver account %s created for %s", email, patient_id)
+    else:
+        log.error("Could not create caregiver %s: %s", email, res.get("error"))
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     from shared.ai_runtime.device_api import BackendAIService, set_service
@@ -63,6 +90,7 @@ def main() -> None:
     applied = Migrator(db).apply_all()
     log.info("Database %s ready (%d migrations checked)", db.db_path, len(applied))
     ensure_admin_password(db)
+    ensure_bootstrap_caregiver(db)
 
     ai = BackendAIService(db)
     set_service(ai)

@@ -74,6 +74,38 @@
     
     /* Badges */
     .badge { display: inline-block; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; }
+    /* Trang chủ (home) */
+    .home-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 20px; }
+    .home-grid .card { margin-bottom: 0; }
+    .home-stack { display: flex; flex-direction: column; gap: 20px; }
+    .profile-row { display: flex; gap: 16px; align-items: center; }
+    .profile-avatar { width: 72px; height: 72px; border-radius: 50%; background: var(--primary-bg); color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 700; flex-shrink: 0; }
+    .profile-table td { padding: 3px 10px 3px 0; border: none; font-size: 14px; }
+    .profile-table td:first-child { color: var(--muted); white-space: nowrap; }
+    .state-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .state-tile { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 10px; text-align: center; }
+    .state-tile .ico { font-size: 28px; line-height: 1.2; }
+    .state-tile .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .state-tile .val { font-size: 15px; font-weight: 700; color: var(--navy); margin-top: 2px; }
+    .state-tile.ok .val { color: var(--success); }
+    .state-tile.bad { background: var(--danger-bg); border-color: #F4B4BD; }
+    .state-tile.bad .val { color: var(--danger); }
+    .donut-wrap { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+    .donut { width: 170px; height: 170px; border-radius: 50%; position: relative; flex-shrink: 0; }
+    .donut::after { content: ""; position: absolute; inset: 26px; background: var(--card-bg); border-radius: 50%; }
+    .donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1; text-align: center; }
+    .donut-center b { font-size: 24px; color: var(--navy); }
+    .donut-center span { font-size: 11px; color: var(--muted); max-width: 100px; line-height: 1.3; }
+    .legend-row { display: flex; align-items: center; gap: 8px; font-size: 14px; margin: 6px 0; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+    .home-table td, .home-table th { padding: 8px 10px; }
+    .med-alert-bar { display: none; background: var(--danger-bg); color: var(--danger); border: 1.5px solid #F4B4BD; border-radius: 12px; margin-bottom: 20px; padding: 12px 18px; font-weight: 700; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .med-alert-bar button { border: 1px solid var(--danger); background: #fff; color: var(--danger); border-radius: 6px; padding: 4px 10px; font-weight: 700; cursor: pointer; }
+    .settings-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; align-items: end; }
+    .settings-row label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px; }
+    .settings-row select, .settings-row input { width: 100%; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 14px; background: #fff; }
+    @media (max-width: 960px) { .home-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 560px) { .state-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .donut-wrap { justify-content: center; } }
     .badge-success { background: var(--success-bg); color: var(--success); }
     .badge-warning { background: var(--warning-bg); color: var(--warning); }
     .badge-danger { background: var(--danger-bg); color: var(--danger); }
@@ -304,9 +336,15 @@
   </div>
 
   <div class="container">
+    <!-- Cảnh báo uống thuốc (hiện ở mọi tab) -->
+    <div class="med-alert-bar" id="medAlertBar" role="alert">
+      <span id="medAlertText"></span>
+      <button onclick="document.getElementById('medAlertBar').style.display='none'">Đã biết</button>
+    </div>
     <!-- Navigation Tabs -->
     <div class="tabs-nav">
-      <button class="tab-btn active" onclick="switchTab('overview')">Tổng quan & Chỉ số sức khỏe</button>
+      <button class="tab-btn active" onclick="switchTab('home'); loadHome();">🏠 Trang chủ</button>
+      <button class="tab-btn" onclick="switchTab('overview')">Tổng quan & Chỉ số sức khỏe</button>
       <button class="tab-btn" onclick="switchTab('vitals-entry')">🩺 Nhập chỉ số sức khỏe</button>
       <button class="tab-btn" onclick="switchTab('medication')">Thuốc & Đơn thuốc</button>
       <button class="tab-btn" onclick="switchTab('mood')">Sức khỏe tinh thần</button>
@@ -317,7 +355,67 @@
     </div>
 
     <!-- 1. TỔNG QUAN & CHỈ SỐ SỨC KHỎE TAB (HỢP NHẤT) -->
-    <div id="tab-overview" class="tab-content active">
+    <div id="tab-home" class="tab-content active">
+      <div class="home-grid">
+        <div class="home-stack">
+          <div class="card">
+            <div class="card-title">Hồ sơ người dùng <span id="homeDate" style="font-size:12px;font-weight:500;color:var(--muted)"></span></div>
+            <div class="profile-row">
+              <div class="profile-avatar" id="homeAvatar">?</div>
+              <table class="profile-table"><tbody id="homeProfile"><tr><td>Đang tải...</td></tr></tbody></table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Nhật ký sinh hoạt hằng ngày
+              <input type="date" id="homeDay" onchange="loadHome()" style="padding:4px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;">
+            </div>
+            <div class="table-responsive"><table class="home-table">
+              <thead><tr><th style="width:70px">Thời gian</th><th>Sự kiện ghi nhận</th></tr></thead>
+              <tbody id="homeTimeline"><tr><td colspan="2">Đang tải...</td></tr></tbody>
+            </table></div>
+          </div>
+          <div class="card">
+            <div class="card-title">💊 Giám sát uống thuốc qua camera</div>
+            <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Đến giờ thuốc, camera tự bật (trước 5 phút) và theo dõi:
+              tay đưa thuốc lên miệng bằng ngón cái và ngón trỏ, miệng há ra. Quá số phút dưới đây mà chưa uống, loa nhắc
+              "Đến giờ uống thuốc rồi, … chưa uống" và web hiện cảnh báo ngay.</p>
+            <div class="settings-row">
+              <div><label for="medHonorific">Cách xưng hô khi nhắc</label>
+                <select id="medHonorific"><option>bác</option><option>anh</option><option>chị</option><option>ông</option><option>bà</option><option>cô</option><option>chú</option></select></div>
+              <div><label for="medOverdue">Cảnh báo sau (phút)</label><input id="medOverdue" type="number" min="1" max="60" value="10"></div>
+              <div><label for="medHand">Tay cầm thuốc</label>
+                <select id="medHand"><option value="right">Tay phải</option><option value="left">Tay trái</option><option value="any">Tay nào cũng được</option></select></div>
+              <div><label for="medFingers">Ngón tay</label>
+                <select id="medFingers"><option value="thumb_index">Ngón cái + ngón trỏ</option><option value="any">Một ngón bất kỳ</option></select></div>
+              <div><button class="btn-submit" onclick="saveMedMonitorSettings()" style="width:100%">Lưu cài đặt</button></div>
+            </div>
+            <div id="medSettingsMsg" style="margin-top:8px;font-size:13px;"></div>
+          </div>
+        </div>
+        <div class="home-stack">
+          <div class="card">
+            <div class="card-title">Trạng thái sinh hoạt hiện tại</div>
+            <div class="state-tiles" id="homeTiles"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Thống kê hoạt động trong ngày <span style="font-size:12px;font-weight:500;color:var(--muted)">24 giờ gần nhất</span></div>
+            <div class="donut-wrap">
+              <div class="donut" id="homeDonut"><div class="donut-center"><b id="homeDonutTotal">0h</b><span>đã quan sát</span></div></div>
+              <div id="homeLegend" style="flex:1;min-width:180px;"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Lịch sử cảnh báo <span style="font-size:12px;font-weight:500;color:var(--muted)">7 ngày</span></div>
+            <div class="table-responsive"><table class="home-table">
+              <thead><tr><th style="width:90px">Thời gian</th><th>Loại cảnh báo</th><th style="width:140px">Trạng thái</th></tr></thead>
+              <tbody id="homeAlerts"><tr><td colspan="3">Đang tải...</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-overview" class="tab-content">
       <section id="localVoiceRequests" aria-live="polite"></section>
       <div class="card" id="cameraMoodCard" aria-live="polite">
         <div class="card-title">Tâm trạng qua camera · Tổng hợp mỗi 2 giờ</div>
@@ -1088,6 +1186,8 @@
 
     async function loadAllData() {
       if (!currentPatientId) return;
+      loadHome();
+      loadMedMonitorSettings();
       loadFamilyMusic();
       loadVoiceRequests();
       loadOverview();
@@ -2695,15 +2795,116 @@
     function handleAiSignal(signal) {
       const type = signal.type;
       if (type === "ai.medication.not_taken") {
+        const med = aiEsc(signal.payload && signal.payload.medication);
+        const mins = aiEsc((signal.payload && signal.payload.minutes) || 10);
         const b = document.getElementById("aiMedBanner");
         b.style.display = "block";
-        b.innerHTML = `⚠️ <b>Đã quá giờ uống thuốc ${aiEsc(signal.payload && signal.payload.medication)}</b> mà camera chưa thấy bác uống. Loa đã nhắc bác.`;
+        b.innerHTML = `⚠️ <b>Đã quá giờ uống thuốc ${med}</b> mà camera chưa thấy uống. Loa đã nhắc.`;
+        const bar = document.getElementById("medAlertBar");
+        document.getElementById("medAlertText").innerHTML = `⚠️ ${new Date().toLocaleTimeString("vi-VN", {hour: "2-digit", minute: "2-digit"})} · Quá ${mins} phút chưa uống thuốc ${med}. Loa đã nhắc người dùng.`;
+        bar.style.display = "flex";
       }
+      if (type === "ai.medication.intake_observed" || type === "ai.medication.monitoring_closed") {
+        // dose taken: the red bar is no longer needed once the home page shows it
+      }
+      if (type.startsWith("ai.") && document.getElementById("tab-home").classList.contains("active")) loadHome();
       if (type === "ai.fall.escalated" && signal.payload && !signal.payload.trial) {
         alert("🚨 Nghi ngã: bác không phản hồi khi được hỏi. Vui lòng liên hệ ngay!");
       }
       if (type.startsWith("ai.medication.")) { loadMedication(); }
       if (document.getElementById("tab-ai-monitor").classList.contains("active")) loadAiMonitor();
+    }
+
+    // ---- Trang chủ ----
+    const HOME_COLORS = {lying: "#2878F0", sitting: "#22A6B3", moving: "#F2A93B", exercise: "#8E6CEF"};
+    const HOME_POSTURE_ICON = {STANDING: "🧍", WALKING: "🚶", SITTING: "🪑", LYING: "🛏️", BENDING: "🙇", UNOBSERVED: "❔"};
+    const HOME_STATUS_BADGE = {done: "badge-success", new: "badge-danger", open: "badge-warning", bad: "badge-danger", warn: "badge-warning", info: "badge-primary"};
+
+    async function loadHome() {
+      if (!currentPatientId) return;
+      const pid = currentPatientId;
+      const dayInput = document.getElementById("homeDay");
+      const day = dayInput.value ? `?date=${encodeURIComponent(dayInput.value)}` : "";
+      const d = await apiCall(`/api/patients/${encodeURIComponent(pid)}/ai/daily${day}`);
+      if (pid !== currentPatientId) return;
+      if (!d || d.error) {
+        document.getElementById("homeTimeline").innerHTML = `<tr><td colspan="2">${aiEsc((d && d.error) || "Không tải được dữ liệu")}</td></tr>`;
+        return;
+      }
+      if (!dayInput.value) dayInput.value = d.date;
+      document.getElementById("homeDate").textContent = new Date(d.date + "T00:00:00").toLocaleDateString("vi-VN");
+      const p = d.profile || {};
+      document.getElementById("homeAvatar").textContent = (p.full_name || "?").trim().split(/\s+/).pop().charAt(0).toUpperCase();
+      const prow = (k, v) => `<tr><td>${k}</td><td><b>${aiEsc(v ?? "—")}</b></td></tr>`;
+      document.getElementById("homeProfile").innerHTML = prow("Mã người dùng", p.patient_id) + prow("Họ tên", p.full_name) +
+        prow("Tuổi", p.age) + prow("Người thân", p.relative) + prow("Cập nhật gần nhất", p.updated_at_utc ? aiTime(p.updated_at_utc) : "—");
+
+      const c = d.current || {};
+      const tile = (ico, lbl, val, cls) => `<div class="state-tile ${cls || ""}"><div class="ico">${ico}</div><div class="lbl">${lbl}</div><div class="val">${aiEsc(val)}</div></div>`;
+      const emoIco = {Happy: "😊", Neutral: "🙂", Sad: "😟"}[c.emotion && c.emotion.key] || "🙂";
+      const alertBad = c.alert && c.alert.count > 0;
+      document.getElementById("homeTiles").innerHTML =
+        tile(HOME_POSTURE_ICON[c.posture && c.posture.key] || "❔", "Tư thế", `${c.posture ? c.posture.label : "—"}${c.posture && c.posture.where ? " " + c.posture.where : ""}`) +
+        tile("🏃", "Hoạt động", c.activity ? c.activity.label : "—") +
+        tile(emoIco, "Cảm xúc", c.emotion ? c.emotion.label : "—", c.emotion && c.emotion.key === "Sad" ? "bad" : "ok") +
+        tile(alertBad ? "⚠️" : "✅", "Cảnh báo", c.alert ? c.alert.label : "Bình thường", alertBad ? "bad" : "ok");
+
+      const items = (d.stats_24h && d.stats_24h.items) || [];
+      const total = items.reduce((s, x) => s + x.seconds, 0);
+      let acc = 0;
+      const stops = items.filter(x => x.seconds > 0).map(x => {
+        const from = acc / total * 360; acc += x.seconds; const to = acc / total * 360;
+        return `${HOME_COLORS[x.key]} ${from}deg ${to}deg`;
+      });
+      document.getElementById("homeDonut").style.background = total ? `conic-gradient(${stops.join(",")})` : "#E9EEF5";
+      document.getElementById("homeDonutTotal").textContent = total ? `${Math.round(total / 360) / 10}h` : "0h";
+      const hm = (sec) => sec >= 3600 ? `${Math.floor(sec / 3600)}h ${Math.round(sec % 3600 / 60)}p` : `${Math.round(sec / 60)} phút`;
+      document.getElementById("homeLegend").innerHTML = items.map(x =>
+        `<div class="legend-row"><span class="legend-dot" style="background:${HOME_COLORS[x.key]}"></span><span style="flex:1">${aiEsc(x.label)}</span><b>${hm(x.seconds)}</b><span style="color:var(--muted);width:44px;text-align:right">${x.percent}%</span></div>`
+      ).join("") + (total ? "" : `<div style="color:var(--muted);font-size:13px;margin-top:6px">Chưa có dữ liệu tư thế từ camera trong 24 giờ qua.</div>`);
+
+      const badge = (text, key) => text ? ` <span class="badge ${HOME_STATUS_BADGE[key] || "badge-primary"}">${aiEsc(text)}</span>` : "";
+      const tl = d.timeline || [];
+      document.getElementById("homeTimeline").innerHTML = tl.length ? tl.map(e =>
+        `<tr><td><b>${aiEsc(e.time)}</b></td><td>${aiEsc(e.text)}${badge(e.status, e.status_key)}</td></tr>`).join("")
+        : `<tr><td colspan="2" style="color:var(--muted)">Chưa có sự kiện nào trong ngày.</td></tr>`;
+      const al = d.alerts || [];
+      document.getElementById("homeAlerts").innerHTML = al.length ? al.map(a =>
+        `<tr><td><b>${aiEsc(a.time)}</b> <span style="color:var(--muted);font-size:12px">${aiEsc(a.date)}</span></td><td>${aiEsc(a.text)}</td><td>${badge(a.status, a.status_key)}</td></tr>`).join("")
+        : `<tr><td colspan="3" style="color:var(--muted)">Không có cảnh báo trong 7 ngày qua.</td></tr>`;
+    }
+
+    let medSettingsCache = null;
+    async function loadMedMonitorSettings() {
+      if (!currentPatientId) return;
+      const r = await apiCall(`/api/patients/${encodeURIComponent(currentPatientId)}/ai/settings/medication`);
+      if (!r || r.error || !r.config) return;
+      medSettingsCache = r.config;
+      document.getElementById("medHonorific").value = r.config.honorific || "bác";
+      document.getElementById("medOverdue").value = Math.round(r.config.policy.overdue_minutes);
+      document.getElementById("medHand").value = r.config.intake.hand;
+      document.getElementById("medFingers").value = r.config.intake.fingers || "thumb_index";
+    }
+
+    async function saveMedMonitorSettings() {
+      const msg = document.getElementById("medSettingsMsg");
+      if (!medSettingsCache) { await loadMedMonitorSettings(); }
+      if (!medSettingsCache) { msg.textContent = "Không đọc được cài đặt hiện tại."; return; }
+      const cfg = JSON.parse(JSON.stringify(medSettingsCache));
+      cfg.honorific = document.getElementById("medHonorific").value;
+      const overdue = Math.max(1, Math.min(60, parseInt(document.getElementById("medOverdue").value || "10", 10)));
+      cfg.policy.overdue_minutes = overdue;
+      if (cfg.policy.escalate_minutes <= overdue) cfg.policy.escalate_minutes = overdue + 20;
+      if (cfg.policy.close_minutes <= cfg.policy.escalate_minutes) cfg.policy.close_minutes = cfg.policy.escalate_minutes + 30;
+      cfg.intake.hand = document.getElementById("medHand").value;
+      cfg.intake.fingers = document.getElementById("medFingers").value;
+      const r = await apiCall(`/api/patients/${encodeURIComponent(currentPatientId)}/ai/settings/medication`, "PUT", {config: cfg});
+      if (r && !r.error) {
+        medSettingsCache = r.config;
+        msg.style.color = "var(--success)"; msg.textContent = "✅ Đã lưu. Thiết bị tại nhà dùng cài đặt mới từ lần giám sát tiếp theo.";
+      } else {
+        msg.style.color = "var(--danger)"; msg.textContent = (r && r.error) || "Không lưu được cài đặt.";
+      }
     }
 
     async function loadAiMonitor() {

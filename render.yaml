@@ -1,28 +1,28 @@
-# Render Blueprint: Dashboard -> New -> Blueprint -> pick this repository.
-# A persistent disk keeps the SQLite database across deploys and restarts (needs a paid instance).
+# Render Blueprint (Root Directory = repository root).
+# Free plan: no persistent disk, so the SQLite database lives in /tmp and is recreated on every deploy
+# or wake-up. AICARE_BOOTSTRAP_CAREGIVER recreates the caregiver login automatically.
+# For permanent data: plan: starter, add a disk at /var/data and point AI_CARE_DB_PATH there.
 services:
   - type: web
-    name: aicare-core-backend
+    name: aicare
     runtime: python
-    plan: starter
+    plan: free
     region: singapore
     branch: main
     buildCommand: pip install -r requirements-backend.txt
-    startCommand: python -m backend.main
+    startCommand: python -m apps.server.main
     healthCheckPath: /api/health
     autoDeploy: true
-    disk:
-      name: aicare-data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.7
       - key: AI_CARE_DB_PATH
-        value: /var/data/unified_care.sqlite3
+        value: /tmp/aicare/unified_care.sqlite3
       - key: AI_CARE_HOME
-        value: /var/data/runtime
+        value: /tmp/aicare/runtime
       - key: AICARE_ADMIN_PASSWORD
+        sync: false
+      - key: AICARE_BOOTSTRAP_CAREGIVER
         sync: false
       - key: AICARE_DEVICE_KEYS
         sync: false
