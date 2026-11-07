@@ -93,6 +93,7 @@ class CloudDeviceRuntime:
         detector_factory: Callable[[], object] | None = None,
         detector_interval: float = 3.0,
         sync_interval: float = 30.0,
+        music_dir=None,
     ) -> None:
         self.http = transport
         self.camera = camera_manager
@@ -128,6 +129,7 @@ class CloudDeviceRuntime:
         self._dets: deque = deque(maxlen=120)
         self._sent: dict = {}
         self._music_failed: set[str] = set()
+        self.music_dir = music_dir
 
     # ------------------------------------------------------------ lifecycle
 
@@ -209,6 +211,7 @@ class CloudDeviceRuntime:
                     "left_hand": [list(p) for p in res.left_hand] if res.left_hand else None,
                     "right_hand": [list(p) for p in res.right_hand] if res.right_hand else None,
                 })
+            self._detect(frame, now)  # keep remembering where things are while the medication window is open
         else:
             if self._pose is None:
                 self._pose = self._make_pose()
@@ -357,7 +360,7 @@ class CloudDeviceRuntime:
         try:
             from features.music_care.family_music_service import FamilyMusicService
 
-            media = FamilyMusicService(self.db).media_dir
+            media = FamilyMusicService(self.db, media_dir=self.music_dir).media_dir
         except Exception:
             return
         media.mkdir(parents=True, exist_ok=True)

@@ -31,7 +31,10 @@ from shared.config import (
 
 logger = logging.getLogger("FaceAdapter")
 
-RECOGNITION_THRESHOLD = 58.0  # Calibrated LBPH threshold with CLAHE illumination normalization
+# LBPH distance below which a face is the registered person. Measured on 15 faces (same-camera variation:
+# the same person 17-20, other people 41+): 58 accepted 51 % of strangers as the patient, 40 accepted none.
+# Register 15-20 photos in different light and angles; tune with AICARE_FACE_THRESHOLD if the elder is missed.
+RECOGNITION_THRESHOLD = float(os.getenv("AICARE_FACE_THRESHOLD", "40"))
 
 
 class FaceAdapter:

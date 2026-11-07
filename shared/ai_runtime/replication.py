@@ -2,11 +2,12 @@
 
 Who owns what
     server -> home ("down"): the medication plan made on the web (medications, prescriptions, items,
-        schedules, dose occurrences) and the family music list. The home app copies them so the elder's
+        schedules, dose occurrences), the exercise plans and the family music list. The home app copies them so the elder's
         to-do list, reminders and music player show what the family set on the web.
     home -> server ("up"): what happens at home and is only recorded locally: emotion summaries,
-        mood check-ins, exercise sessions and reps, vitals typed in at home, cognitive games, face
-        sightings, and dose actions pressed on the home screen ("Đã uống" / "Bỏ qua").
+        mood check-ins, exercise sessions and reps (with the default exercise plans they point to),
+        vitals typed in at home, cognitive games, face sightings, and dose actions pressed on the home
+        screen ("Đã uống" / "Bỏ qua").
 
 Rules
     * Rows keep their ids on both sides, upserts are idempotent (INSERT .. ON CONFLICT DO UPDATE, never
@@ -32,9 +33,11 @@ from shared.database.outbox_helper import insert_outbox_event
 log = logging.getLogger("AIReplication")
 UTC = timezone.utc
 
-DOWN_TABLES = ("medications", "prescriptions", "prescription_items", "medication_schedules", "dose_occurrences", "family_music")
+DOWN_TABLES = ("medications", "prescriptions", "prescription_items", "medication_schedules", "dose_occurrences", "family_music",
+               "rehab_plans")
 # table -> SQL expression used to pick recent rows on the home side (watermark-free, idempotent resend)
 UP_TABLES = {
+    "rehab_plans": "effective_from",  # default plans made at home; insert-only on the server (web edits win)
     "emotion_summaries_v2": "published_at",
     "mood_checkins": "recorded_at",
     "rehab_sessions": "COALESCE(ended_at, started_at)",
@@ -65,8 +68,27 @@ def _patient_user(conn, patient_id: str) -> str | None:
     return row["user_id"] if row else None
 
 
-def upsert(conn, table: str, row: dict, patient_id: str | None = None) -> bool:
-    """Insert or update one row by its primary key. Returns False when the row was skipped."""
+INSERT_ONLY_UP = {"rehab_plans"}
+
+
+def _adopt_session_id(conn, row: dict) -> None:
+    """The web makes a placeholder session per plan and day; the home app's session for the same day replaces it.
+
+    Sessions are unique per (patient, plan, day) but the two sides name them differently, so the server row
+    (and its events) takes the home app's id before the normal upsert.
+    """
+    new_id = row.get("session_id")
+    old = conn.fetchone("SELECT session_id FROM rehab_sessions WHERE patient_id=? AND plan_id=? AND local_date=? AND session_id<>?",
+                        (row.get("patient_id"), row.get("plan_id"), row.get("local_date"), new_id))
+    if not new_id or not old:
+        return
+    conn.execute("PRAGMA defer_foreign_keys=ON")
+    conn.execute("UPDATE rehab_sessions SET session_id=? WHERE session_id=?", (new_id, old["session_id"]))
+    conn.execute("UPDATE rehab_events SET session_id=? WHERE session_id=?", (new_id, old["session_id"]))
+
+
+def upsert(conn, table: str, row: dict, patient_id: str | None = None, insert_only: bool = False) -> bool:
+    """Insert or update one row by its primary key (``insert_only``: keep an existing row). False = skipped."""
     cols = _columns(conn, table)
     data = {k: v for k, v in row.items() if k in cols}
     pk = [name for name, c in sorted(cols.items(), key=lambda kv: kv[1]["pk"]) if c["pk"]]
@@ -89,7 +111,8 @@ def upsert(conn, table: str, row: dict, patient_id: str | None = None) -> bool:
     names = list(data)
     updates = [n for n in names if n not in pk]
     sql = (f"INSERT INTO {table} ({', '.join(names)}) VALUES ({', '.join('?' for _ in names)}) "
-           f"ON CONFLICT({', '.join(pk)}) DO " + (f"UPDATE SET {', '.join(f'{n}=excluded.{n}' for n in updates)}" if updates else "NOTHING"))
+           f"ON CONFLICT({', '.join(pk)}) DO " + (f"UPDATE SET {', '.join(f'{n}=excluded.{n}' for n in updates)}"
+                                                  if updates and not insert_only else "NOTHING"))
     conn.execute(sql, [data[n] for n in names])
     return True
 
@@ -120,6 +143,7 @@ def snapshot_for_device(db, patient_id: str, now: datetime | None = None) -> dic
             "dose_occurrences": _rows(conn, "SELECT * FROM dose_occurrences WHERE patient_id=? AND scheduled_at_utc>=? AND scheduled_at_utc<?",
                                       (patient_id, (now - timedelta(days=1)).isoformat(), (now + timedelta(days=8)).isoformat())),
             "family_music": _rows(conn, "SELECT * FROM family_music WHERE patient_id=? ORDER BY created_at DESC", (patient_id,)),
+            "rehab_plans": _rows(conn, "SELECT * FROM rehab_plans WHERE patient_id=?", (patient_id,)),
         }
 
 
@@ -145,7 +169,9 @@ def apply_from_device(db, patient_id: str, body: dict) -> dict:
                     if not owner or owner["patient_id"] != patient_id:
                         refused += 1
                         continue
-                if upsert(conn, table, row, patient_id):
+                if table == "rehab_sessions":
+                    _adopt_session_id(conn, row)
+                if upsert(conn, table, row, patient_id, insert_only=table in INSERT_ONLY_UP):
                     stored[table] = stored.get(table, 0) + 1
         actions = [a for a in body.get("dose_actions") or [] if isinstance(a, dict)]
         applied = sum(1 for a in actions if _apply_dose_action(conn, patient_id, a))
@@ -242,7 +268,7 @@ def apply_snapshot(db, snap: dict, patient_id: str) -> dict:
             if table == "dose_occurrences":
                 continue
             for row in snap.get(table) or []:
-                if row.get("patient_id", patient_id) != patient_id and table in ("prescriptions", "family_music"):
+                if row.get("patient_id", patient_id) != patient_id and table in ("prescriptions", "family_music", "rehab_plans"):
                     continue
                 if upsert(conn, table, row, patient_id):
                     counts[table] = counts.get(table, 0) + 1

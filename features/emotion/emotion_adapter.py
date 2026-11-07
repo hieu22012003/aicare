@@ -83,9 +83,9 @@ class EmotionAdapter:
 
     def _init_model(self) -> None:
         """Load ExpressionNet PyTorch model and MediaPipe FaceMesh / FaceLandmarker."""
+        # The neural net is optional: without torch or expression_net.pth the face geometry (FACS) still works.
         try:
-            import mediapipe as mp
-            import torch
+            import torch  # noqa: F401
             from features.emotion.model.main import load_model
             from features.emotion.model.src.config import PATHS
 
@@ -97,6 +97,14 @@ class EmotionAdapter:
                 if self._model is not None:
                     self._model.eval()
                     logger.info("Loaded ExpressionNet PyTorch model successfully from %s.", model_path)
+            else:
+                logger.info("expression_net.pth not found; emotion uses face geometry (FACS) only.")
+        except Exception as e:
+            self._model = None
+            logger.warning("Emotion neural net unavailable (%s); using face geometry (FACS) only.", e)
+
+        try:
+            import mediapipe as mp
 
             # 1. Try legacy MediaPipe solutions.face_mesh
             if hasattr(mp, "solutions") and hasattr(mp.solutions, "face_mesh"):
@@ -142,7 +150,7 @@ class EmotionAdapter:
             except Exception as ex:
                 logger.debug("MediaPipe Tasks FaceLandmarker init failed: %s", ex)
         except Exception as e:
-            logger.warning("Could not initialize full Emotion Neural Net: %s", e)
+            logger.warning("Could not initialize MediaPipe face landmarks for emotion: %s", e)
 
     def _compute_facs_probabilities(self, landmarks: Any) -> np.ndarray:
         """

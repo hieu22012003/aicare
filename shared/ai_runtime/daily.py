@@ -16,6 +16,12 @@ from zoneinfo import ZoneInfo
 
 UTC = timezone.utc
 
+
+def _dt(iso: str) -> datetime:
+    """Parse a stored timestamp; dose times are written without an offset and are UTC."""
+    at = datetime.fromisoformat(iso)
+    return at if at.tzinfo else at.replace(tzinfo=UTC)
+
 POSTURE_VI = {"STANDING": "Đứng", "WALKING": "Đi lại", "SITTING": "Ngồi", "LYING": "Nằm", "BENDING": "Cúi người",
               "UNOBSERVED": "Không thấy trong khung hình"}
 LOCATION_VI = {"BED": "trên giường", "CHAIR": "trên ghế", "SOFA": "trên sofa", "FLOOR": "dưới sàn"}
@@ -96,7 +102,7 @@ def daily_summary(db, patient_id: str, day: str | None = None, now: datetime | N
     for r in _rows(db, "SELECT started_at, ended_at FROM rehab_sessions WHERE patient_id=? AND started_at>=? AND ended_at IS NOT NULL",
                    (patient_id, since24)):
         try:
-            exercise += max(0.0, (datetime.fromisoformat(r["ended_at"]) - datetime.fromisoformat(r["started_at"])).total_seconds())
+            exercise += max(0.0, (_dt(r["ended_at"]) - _dt(r["started_at"])).total_seconds())
         except (TypeError, ValueError):
             pass
     stats = [
@@ -141,7 +147,7 @@ def face_notes(db, pid: str, day: str, now: datetime, tz) -> list[dict]:
 
 def _local(iso: str | None, tz) -> str:
     try:
-        return datetime.fromisoformat(iso).astimezone(tz).strftime("%H:%M")
+        return _dt(iso).astimezone(tz).strftime("%H:%M")
     except (TypeError, ValueError):
         return ""
 
@@ -256,7 +262,7 @@ def _monitored(db, pid: str, s: str, e: str) -> list[dict]:
     for r in _rows(db, "SELECT d.medication_name_snapshot AS med, d.scheduled_at_utc, d.state, m.actions_done FROM "
                        "ai_medication_monitor m JOIN dose_occurrences d ON d.occurrence_id=m.occurrence_id WHERE m.patient_id=? "
                        "AND d.scheduled_at_utc>=? AND d.scheduled_at_utc<?", (pid, s, e)):
-        at = datetime.fromisoformat(r["scheduled_at_utc"])
+        at = _dt(r["scheduled_at_utc"])
         out.append({"med": r["med"], "state": r["state"], "done": set(json.loads(r["actions_done"] or "[]")),
                     "opened_at": _iso(at - timedelta(minutes=before)), "overdue_at": _iso(at + timedelta(minutes=overdue)),
                     "overdue_minutes": int(overdue)})
@@ -265,7 +271,7 @@ def _monitored(db, pid: str, s: str, e: str) -> list[dict]:
 
 def _date(iso: str, tz) -> str:
     try:
-        return datetime.fromisoformat(iso).astimezone(tz).strftime("%d/%m")
+        return _dt(iso).astimezone(tz).strftime("%d/%m")
     except (TypeError, ValueError):
         return ""
 
@@ -290,7 +296,7 @@ def period_report(db, patient_id: str, days: int = 7, now: datetime | None = Non
 
     def local_day(iso: str | None) -> str | None:
         try:
-            return datetime.fromisoformat(iso).astimezone(tz).date().isoformat()
+            return _dt(iso).astimezone(tz).date().isoformat()
         except (TypeError, ValueError):
             return None
 
@@ -304,7 +310,7 @@ def period_report(db, patient_id: str, days: int = 7, now: datetime | None = Non
     for r in _rows(db, "SELECT scheduled_at_utc, state, action_actor FROM dose_occurrences WHERE patient_id=? AND scheduled_at_utc>=? "
                        "AND scheduled_at_utc<? AND state!='CANCELLED'", (patient_id, s, e)):
         d = rows.get(local_day(r["scheduled_at_utc"]))
-        if not d or datetime.fromisoformat(r["scheduled_at_utc"]) > now:
+        if not d or _dt(r["scheduled_at_utc"]) > now:
             continue
         d["doses"] += 1
         if r["state"] == "CONFIRMED":

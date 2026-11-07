@@ -81,3 +81,14 @@ def test_weekly_report_counts_doses_alerts_and_activity():
     assert today["doses"] == 1 and today["taken"] == 0 and today["adherence"] == 0 and today["sitting_h"] == 2.0
     assert r["totals"]["alerts"] >= 1 and any("chưa uống" in a["text"] for a in r["abnormal_events"])
     assert handle_ai_route(db, None, "GET", ["report"], {"days": "30"}, None, PID, "u")[1]["days"] == 30
+
+
+def test_report_reads_dose_times_stored_without_offset():
+    """The medication service writes scheduled_at_utc as '2026-11-07T00:30:00' (UTC, no offset)."""
+    from shared.ai_runtime.daily import period_report
+
+    db = setup()
+    add_dose(db)
+    db.execute("UPDATE dose_occurrences SET scheduled_at_utc=substr(scheduled_at_utc, 1, 19)")
+    r = period_report(db, PID, 7, now=datetime.fromtimestamp(T0 + 3600, UTC))
+    assert r["by_day"][-1]["doses"] == 1

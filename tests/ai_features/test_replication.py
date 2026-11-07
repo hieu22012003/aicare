@@ -113,3 +113,43 @@ def test_device_routes(monkeypatch):
     assert code == 200 and res["dose_actions_applied"] == 0
     assert handle_device_route(server, "GET", f"/api/device/patients/{PID}/music/nope", {}, None, h)[0] == 404
     assert handle_device_route(server, "GET", f"/api/device/patients/{PID}/snapshot", {}, None, {"X-Device-Key": "wrong-key-0000000000"})[0] == 401
+
+
+def test_exercise_session_reaches_the_server_with_its_default_plan():
+    from features.exercise_rehab.rehab_session_adapter import ensure_default_rehab_plans
+
+    server, home = fresh(), fresh()
+    with home.connect() as conn:
+        plans = ensure_default_rehab_plans(conn, PID)
+    plan = plans[0]
+    home.execute("INSERT INTO rehab_sessions (session_id, patient_id, plan_id, plan_version, local_date, started_at, ended_at, "
+                 "target_count_snapshot, verified_count, status) VALUES ('rs1', ?, ?, 1, '2026-11-07', ?, ?, 10, 10, "
+                 "'camera_verified_completed')", (PID, plan["plan_id"], NOW.isoformat(), (NOW + timedelta(minutes=5)).isoformat()))
+    res = apply_from_device(server, PID, collect_for_server(home, PID, now=NOW + timedelta(minutes=6)))
+    assert res["stored"].get("rehab_sessions") == 1 and res["stored"].get("rehab_plans", 0) >= 1
+    # the web changes the target; a later resend from home must not undo it
+    server.execute("UPDATE rehab_plans SET target_count=20 WHERE plan_id=?", (plan["plan_id"],))
+    apply_from_device(server, PID, collect_for_server(home, PID, now=NOW + timedelta(minutes=6)))
+    assert server.fetchone("SELECT target_count FROM rehab_plans WHERE plan_id=?", (plan["plan_id"],))["target_count"] == 20
+    apply_snapshot(home, snapshot_for_device(server, PID, NOW), PID)
+    assert home.fetchone("SELECT target_count FROM rehab_plans WHERE plan_id=?", (plan["plan_id"],))["target_count"] == 20
+
+
+def test_home_session_replaces_the_web_placeholder_for_the_same_day():
+    from features.exercise_rehab.rehab_session_adapter import ensure_default_rehab_plans
+
+    server, home = fresh(), fresh()
+    with home.connect() as conn:
+        plan = ensure_default_rehab_plans(conn, PID)[0]
+    with server.connect() as conn:
+        ensure_default_rehab_plans(conn, PID)
+    # opening the web dashboard makes a pending session for today under the web's own id
+    server.execute("INSERT INTO rehab_sessions (session_id, patient_id, plan_id, plan_version, local_date, "
+                   "target_count_snapshot, status) VALUES ('rs_web', ?, ?, 1, '2026-11-07', 10, 'pending')", (PID, plan["plan_id"]))
+    home.execute("INSERT INTO rehab_sessions (session_id, patient_id, plan_id, plan_version, local_date, started_at, ended_at, "
+                 "target_count_snapshot, verified_count, status) VALUES ('rs_home', ?, ?, 1, '2026-11-07', ?, ?, 10, 10, "
+                 "'camera_verified_completed')", (PID, plan["plan_id"], NOW.isoformat(), (NOW + timedelta(minutes=5)).isoformat()))
+    res = apply_from_device(server, PID, collect_for_server(home, PID, now=NOW + timedelta(minutes=6)))
+    assert res["stored"].get("rehab_sessions") == 1
+    rows = server.fetchall("SELECT session_id, status, verified_count FROM rehab_sessions WHERE plan_id=?", (plan["plan_id"],))
+    assert [(r["session_id"], r["status"], r["verified_count"]) for r in rows] == [("rs_home", "camera_verified_completed", 10)]
