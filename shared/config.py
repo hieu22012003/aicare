@@ -213,6 +213,20 @@ EXERCISES = {
         "target_reps": 15,
         "instructions": "Nâng luân phiên đùi trái và đùi phải lên ngang hông, giữ thẳng người.",
     },
+    "arm_circles": {
+        "id": "arm_circles",
+        "name": "Xoay khớp vai (Xoay tròn cánh tay)",
+        "name_short": "Xoay khớp vai",
+        "target_reps": 10,
+        "instructions": "Dang hai tay sang ngang, xoay tròn cánh tay quanh vai thành vòng rộng, chậm và đều.",
+    },
+    "side_bend": {
+        "id": "side_bend",
+        "name": "Nghiêng người giãn cơ (Vươn sang hai bên)",
+        "name_short": "Nghiêng người giãn cơ",
+        "target_reps": 8,
+        "instructions": "Giữ lưng thẳng, nghiêng người sang trái, về giữa, rồi nghiêng sang phải. Nghiêng vừa phải, không cố quá.",
+    },
 }
 
 # Ensure UTF-8 output on Windows console

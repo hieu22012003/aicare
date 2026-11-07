@@ -488,6 +488,147 @@ class MarchingTracker(BaseExerciseTracker):
         return self.stage, self.feedback, round(curr_score, 1)
 
 
+def _visible(points, threshold: float = 0.35) -> bool:
+    return all(getattr(p, "visibility", 1.0) >= threshold for p in points)
+
+
+def _score(tracker: BaseExerciseTracker) -> float:
+    if tracker.form_scores:
+        return round(float(np.mean(tracker.form_scores)), 1)
+    return 0.0
+
+
+class ArmCircleTracker(BaseExerciseTracker):
+    """
+    Xoay khớp vai (Arm circles): both arms draw full circles around the shoulders.
+
+    The wrist's angle around its shoulder is unwrapped frame by frame; one repetition is one full turn
+    (>= 300 degrees accumulated in one direction) by the average of both arms. A turn that is too small
+    (wrist close to the shoulder, radius < 60 % of the upper arm) counts but loses points.
+    Observability: shoulders, elbows and wrists (11-16).
+    """
+
+    base_stage = "ready"
+    TURN = 300.0
+
+    def __init__(self, target_reps: int = 10) -> None:
+        super().__init__(target_reps=target_reps)
+        self.exercise_name = "Xoay khớp vai (Xoay tròn cánh tay)"
+        self._prev: Dict[str, float] = {}
+        self._acc = 0.0
+        self._small = 0
+
+    def reset_in_progress_rep(self) -> None:
+        super().reset_in_progress_rep()
+        self._prev = {}
+        self._acc = 0.0
+        self._small = 0
+
+    @staticmethod
+    def _angle(sh: Any, wr: Any) -> float:
+        return float(np.degrees(np.arctan2(wr.y - sh.y, wr.x - sh.x)))
+
+    def process(self, lm: Any, w: int, h: int) -> Tuple[str, str, float]:
+        if self.is_paused:
+            return self.base_stage, "Bài tập đang tạm dừng", _score(self)
+        try:
+            pts = {"l": (lm[11], lm[13], lm[15]), "r": (lm[12], lm[14], lm[16])}
+        except Exception:
+            return self.stage, f"Không thấy đầy đủ khớp tay (Đã ghi nhận {self.reps} lần)", _score(self)
+        if not _visible([p for trio in pts.values() for p in trio]):
+            self.reset_in_progress_rep()
+            return self.stage, f"Lùi xa để camera thấy cả hai tay (Đã ghi nhận {self.reps} lần)", _score(self)
+        deltas = []
+        for side, (sh, el, wr) in pts.items():
+            ang = self._angle(sh, wr)
+            if side in self._prev:
+                d = (ang - self._prev[side] + 180.0) % 360.0 - 180.0
+                deltas.append(d)
+            self._prev[side] = ang
+            upper = float(np.hypot(el.x - sh.x, el.y - sh.y)) or 1e-6
+            if float(np.hypot(wr.x - sh.x, wr.y - sh.y)) < 0.6 * upper:
+                self._small += 1
+        if deltas:
+            # the two arms mirror each other when circling forward, so add the magnitudes
+            self._acc += float(np.mean([abs(d) for d in deltas])) if len(deltas) == 2 else abs(deltas[0])
+        self.stage = "circling" if self._acc > 30 else "ready"
+        self.feedback = "Xoay tròn hai tay thật đều, vòng rộng..." if self.stage == "circling" else "Dang hai tay, bắt đầu xoay tròn"
+        if self._acc >= self.TURN:
+            self.reps += 1
+            score = 100.0 - min(40.0, self._small * 2.0)
+            self.form_scores.append(score)
+            if score >= 85:
+                self.correct_reps += 1
+                self.feedback = f"Đúng tư thế! (Vòng {self.reps})"
+            else:
+                self.incorrect_reps += 1
+                self.feedback = f"Vòng {self.reps}: xoay vòng rộng hơn, duỗi thẳng tay"
+            self._acc = 0.0
+            self._small = 0
+        return self.stage, self.feedback, _score(self)
+
+
+class SideBendTracker(BaseExerciseTracker):
+    """
+    Nghiêng người giãn cơ (Side bends): lean the upper body to the left, back to center, to the right.
+
+    Torso tilt = angle of the hip-midpoint -> shoulder-midpoint line from vertical. One repetition is
+    a lean of >= 12 degrees to one side followed by >= 12 degrees to the other side, each held a moment,
+    with a return through the center. Leans over 35 degrees lose points (too far for elderly users).
+    Observability: shoulders and hips (11, 12, 23, 24).
+    """
+
+    base_stage = "center"
+    LEAN, MAX_SAFE, HOLD = 12.0, 35.0, 0.3
+
+    def __init__(self, target_reps: int = 10) -> None:
+        super().__init__(target_reps=target_reps)
+        self.exercise_name = "Nghiêng người giãn cơ (Vươn sang hai bên)"
+        self._sides: List[str] = []
+        self._side_since = 0.0
+
+    def reset_in_progress_rep(self) -> None:
+        super().reset_in_progress_rep()
+        self._sides = []
+
+    def process(self, lm: Any, w: int, h: int) -> Tuple[str, str, float]:
+        now = time.time()
+        if self.is_paused:
+            return self.base_stage, "Bài tập đang tạm dừng", _score(self)
+        try:
+            ls, rs, lh, rh = lm[11], lm[12], lm[23], lm[24]
+        except Exception:
+            return self.stage, f"Không thấy vai và hông (Đã ghi nhận {self.reps} lần)", _score(self)
+        if not _visible([ls, rs, lh, rh]):
+            return self.stage, f"Lùi xa để camera thấy vai và hông (Đã ghi nhận {self.reps} lần)", _score(self)
+        sx, sy = (ls.x + rs.x) / 2 * w, (ls.y + rs.y) / 2 * h
+        hx, hy = (lh.x + rh.x) / 2 * w, (lh.y + rh.y) / 2 * h
+        tilt = float(np.degrees(np.arctan2(sx - hx, hy - sy)))  # + = shoulders to the image right
+        side = "right" if tilt >= self.LEAN else "left" if tilt <= -self.LEAN else "center"
+        if abs(tilt) > self.MAX_SAFE and "Nghiêng vừa phải" not in self.rep_issues:
+            self.rep_issues.append("Nghiêng vừa phải")
+            self.rep_penalties += 15.0
+        if side != self.stage:
+            self.stage, self._side_since = side, now
+        if side != "center" and now - self._side_since >= self.HOLD and (not self._sides or self._sides[-1] != side):
+            self._sides.append(side)
+            self.feedback = "Tốt, trở về giữa rồi nghiêng sang bên kia" if len(self._sides) == 1 else self.feedback
+        elif side == "center" and not self._sides:
+            self.feedback = "Đứng hoặc ngồi thẳng, nghiêng người sang một bên"
+        if len(set(self._sides)) == 2 and side == "center":
+            self.reps += 1
+            score = max(50.0, 100.0 - self.rep_penalties)
+            self.form_scores.append(score)
+            if self.rep_penalties < 15:
+                self.correct_reps += 1
+                self.feedback = f"Đúng tư thế! (Lần {self.reps})"
+            else:
+                self.incorrect_reps += 1
+                self.feedback = f"Lần {self.reps}: {', '.join(self.rep_issues[:1])}"
+            self._sides, self.rep_penalties, self.rep_issues = [], 0.0, []
+        return self.stage, self.feedback, _score(self)
+
+
 class RehabilitationEngine:
     """
     Main Rehabilitation Vision Engine.
@@ -499,6 +640,8 @@ class RehabilitationEngine:
         "sit_to_stand": SitToStandTracker,
         "arm_raise": ArmRaiseTracker,
         "marching": MarchingTracker,
+        "arm_circles": ArmCircleTracker,
+        "side_bend": SideBendTracker,
     }
 
     def __init__(self, voice_feedback_fn: Optional[Callable[[str], None]] = None) -> None:

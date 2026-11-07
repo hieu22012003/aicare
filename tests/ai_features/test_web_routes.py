@@ -36,7 +36,7 @@ def call(db, method, rest, query=None, body=None, auth=None):
 
 def test_overview_and_where(db):
     code, data = call(db, "GET", [])
-    assert code == 200 and data["fall"]["trial"] is True and data["posture"]["current"] is None
+    assert code == 200 and data["fall"]["trial"] is False and data["posture"]["current"] is None
     brain = AICoreBrain(AICoreStore(db))
     now = time.time()
     for i in range(3):

@@ -224,6 +224,11 @@ class DashboardWindow(QMainWindow):
         from shared.ai_runtime.app_hooks import start_ai_core
         self.ai_core = start_ai_core(self)
 
+        # Mental support: when the emotion summary says "sad", speak a suggestion and start music.
+        self._comfort_timer = QTimer(self)
+        self._comfort_timer.timeout.connect(self._check_sadness_comfort)
+        self._comfort_timer.start(60_000)
+
         # Setup 1-second periodic timer for UI sync
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._on_timer_tick)
@@ -510,9 +515,19 @@ class DashboardWindow(QMainWindow):
         self.btn_ex_march.setStyleSheet(EX_INACTIVE_STYLE)
         self.btn_ex_march.clicked.connect(lambda: self._select_exercise("marching"))
 
+        self.btn_ex_circles = QPushButton("🔄 4. Xoay khớp vai\n     (Arm Circles) • 10 vòng")
+        self.btn_ex_circles.setStyleSheet(EX_INACTIVE_STYLE)
+        self.btn_ex_circles.clicked.connect(lambda: self._select_exercise("arm_circles"))
+
+        self.btn_ex_bend = QPushButton("🤸 5. Nghiêng người giãn cơ\n     (Side Bend) • 8 lần")
+        self.btn_ex_bend.setStyleSheet(EX_INACTIVE_STYLE)
+        self.btn_ex_bend.clicked.connect(lambda: self._select_exercise("side_bend"))
+
         lay_card_ex.addWidget(self.btn_ex_arm)
         lay_card_ex.addWidget(self.btn_ex_sit)
         lay_card_ex.addWidget(self.btn_ex_march)
+        lay_card_ex.addWidget(self.btn_ex_circles)
+        lay_card_ex.addWidget(self.btn_ex_bend)
 
         # Controls row: Start & Stop & Pause (Row 1)
         ctrl_row_1 = QHBoxLayout()
@@ -824,6 +839,8 @@ class DashboardWindow(QMainWindow):
             "arm_raise": self.btn_ex_arm,
             "sit_to_stand": self.btn_ex_sit,
             "marching": self.btn_ex_march,
+            "arm_circles": self.btn_ex_circles,
+            "side_bend": self.btn_ex_bend,
         }
         for ex_id, btn in buttons.items():
             if ex_id == exercise_id:
@@ -833,7 +850,8 @@ class DashboardWindow(QMainWindow):
 
         target = self.rehab_plans.get(exercise_id, {}).get("target_count")
         if target is None:
-            target = next((s["target"] for s in self.routine_steps if s["id"] == exercise_id), 10)
+            target = next((s["target"] for s in self.routine_steps if s["id"] == exercise_id),
+                          EXERCISES.get(exercise_id, {}).get("target_reps", 10))
 
         self.router.rehab_adapter.select_exercise(exercise_id, target_reps=target)
         self.banner_guidance.setText(f"💡 Hướng dẫn tư thế: {EXERCISES.get(exercise_id, {}).get('instructions', '')}")
@@ -1092,6 +1110,55 @@ class DashboardWindow(QMainWindow):
         if getattr(self, 'voice_dispatcher', None):
             self.voice_dispatcher.invalidate()
 
+    def _check_sadness_comfort(self):
+        pid = getattr(self, "_active_resolved_pid", None)
+        if not pid:
+            return
+        try:
+            if getattr(self, "_comfort", None) is None:
+                from features.music_care.comfort import SadnessComfort
+                from features.voice_assistant.voice_ai.audio.tts_player import get_tts_coordinator
+
+                self._comfort = SadnessComfort(self.unified_db, get_tts_coordinator().speak, self._play_comfort_music,
+                                               honorific=self._elder_honorific(pid))
+            self._comfort.check(pid)
+        except Exception:
+            logger.debug("comfort check failed", exc_info=True)
+
+    def _elder_honorific(self, pid):
+        try:
+            from shared.ai_runtime.store import AICoreStore
+
+            return (AICoreStore(self.unified_db).get_settings(pid, "medication") or {}).get("honorific") or "bác"
+        except Exception:
+            return "bác"
+
+    def _play_comfort_music(self):
+        """Prefer a track the family uploaded; otherwise the first relaxing track."""
+        w = getattr(getattr(self, "cognitive_games_widget", None), "music_widget", None)
+        if w is None or w.audio_service.is_playing:
+            return False
+        w._refresh_track_list()
+        if w.combo_tracks.count() == 0:
+            return False
+        family = next((i for i in range(w.combo_tracks.count()) if str(w.combo_tracks.itemData(i)).startswith("family_")), 0)
+        w.combo_tracks.setCurrentIndex(family)
+        w._on_play_clicked()
+        return w.audio_service.is_playing
+
+    def _log_face_sighting(self, patient_id, who):
+        """Face monitoring log (first/last seen per day, strangers); never breaks the UI loop."""
+        if not patient_id:
+            return
+        try:
+            if getattr(self, "_face_sighting_log", None) is None:
+                from features.face_monitoring.sighting_log import FaceSightingLog
+
+                self._face_sighting_log = FaceSightingLog(self.unified_db)
+            self._face_sighting_log.record(patient_id, who)
+        except Exception:
+            logger.debug("face sighting log failed", exc_info=True)
+
     def _resolve_patient_id(self, r_id: str) -> str:
         """Resolve face recognition legacy id or camera patient id to canonical patient_id."""
         if not r_id:
@@ -1145,6 +1212,7 @@ class DashboardWindow(QMainWindow):
             self.lbl_header_patient.setText(f"👤 Đang theo dõi: {r_name} (Mã: {r_id})")
             self.router.update_recognized_user(r_id, r_name)
             resolved_pid = self._resolve_patient_id(r_id)
+            self._log_face_sighting(resolved_pid, "patient")
             if getattr(self, "_active_resolved_pid", None) != resolved_pid:
                 self._active_resolved_pid = resolved_pid
                 self._load_rehab_plans_from_db(resolved_pid)
@@ -1164,6 +1232,7 @@ class DashboardWindow(QMainWindow):
             self.lbl_face_status.setStyleSheet("font-size: 15px; font-weight: 700; color: #A96300;")
             self.lbl_face_sub.setText("Chưa có hồ sơ trong CSDL. Bấm [➕ Đăng Ký Người Mới] để thêm thông tin.")
             self.lbl_header_patient.setText("👤 Đang theo dõi: Người lạ (Chưa đăng ký)")
+            self._log_face_sighting(getattr(self, "_active_resolved_pid", None), "stranger")
         else:
             self.lbl_face_status.setText("⚪ Chưa phát hiện khuôn mặt")
             self.lbl_face_status.setStyleSheet("font-size: 15px; font-weight: 700; color: #667B74;")

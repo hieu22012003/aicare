@@ -66,7 +66,7 @@ def test_fast_fall_creates_event_and_asks():
     events, _ = fall(eng)
     assert changes(events) == ["created"]
     ev = event_of(events)
-    assert ev.kind == FallKind.F1_FALL and ev.status == EventStatus.CHECKING and ev.trial
+    assert ev.kind == FallKind.F1_FALL and ev.status == EventStatus.CHECKING and not ev.trial  # alerts on by default
     asks = [e for e in events if isinstance(e, CheckinRequested)]
     assert [a.attempt for a in asks] == [1] and "có sao không" in asks[0].prompt
     assert eng.state() == SafetyState.EVENT_ACTIVE

@@ -6,6 +6,7 @@ desktop worker). Patient access ('view') is already checked by ApiRouter; writes
 
     GET  ai                         overview: posture, fall events, risk signals, objects, medication evidence
     GET  ai/daily?date=YYYY-MM-DD   home page: profile, current state, today's timeline, 24 h stats, alert history
+    GET  ai/report?days=7|30        weekly / monthly report: adherence, alerts, falls, mood, activity by day
     GET  ai/objects/where?q=...     "kính của bà ở đâu?" answered from the last sightings
     GET  ai/settings/{feature}      posture | fall | objects | medication
     PUT  ai/settings/{feature}      validated with the same pydantic models the worker uses
@@ -34,6 +35,15 @@ def handle_ai_route(db, auth, method: str, rest: list[str], query: dict, body: d
 
     if method == "GET" and not rest:
         return 200, overview(store, patient_id)
+
+    if method == "GET" and rest == ["report"]:
+        from shared.ai_runtime.daily import period_report
+
+        try:
+            days = int(_first(query, "days").strip() or 7)
+        except ValueError:
+            return 400, {"error": "days phải là số ngày (7 hoặc 30)"}
+        return 200, period_report(db, patient_id, days)
 
     if method == "GET" and rest == ["daily"]:
         from shared.ai_runtime.daily import daily_summary

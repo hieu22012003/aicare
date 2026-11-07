@@ -174,3 +174,24 @@ def test_queue_survives_an_outage(env):
     dev.http = real
     dev.flush()
     assert len(dev._obs) == 0
+
+
+def test_sync_pulls_the_plan_and_pushes_the_home_button(env):
+    db, svc, clock = env
+    home = UnifiedDatabaseManager(":memory:")
+    Migrator(home).apply_all()
+    home.execute("INSERT INTO patients(patient_id, full_name) VALUES (?, ?)", (PID, "Cụ Mây"))
+    dev = CloudDeviceRuntime(Transport(db), Camera(), lambda: (PID, True), lambda s: None, pose_factory=NoPose, clock=clock, db=home)
+    dev.sync()
+    local = home.fetchone("SELECT state FROM dose_occurrences WHERE occurrence_id='occ_c'")
+    assert local["state"] == "PENDING"
+    home.execute("UPDATE dose_occurrences SET state='CONFIRMED', action_taken_at_utc=?, action_actor='elder_button' "
+                 "WHERE occurrence_id='occ_c'", (datetime.now(UTC).isoformat(),))
+    out = dev.sync()
+    assert out["up"]["dose_actions_applied"] == 1 and state(db) == "CONFIRMED"
+    clock.now = T0 + 11 * 60  # no "chưa uống" any more
+    spoken = []
+    dev.speak = spoken.append
+    svc.tick()
+    dev.poll_commands()
+    assert not any("chưa uống" in s for s in spoken)

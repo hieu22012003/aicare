@@ -3,7 +3,8 @@
 * Reads the latest RAW frame from the existing CameraManager (never the annotated one), ~8 fps.
   Simulated/test frames are skipped (``latest_capture_valid``).
 * Pose model normally; Holistic (pose + face + hands) only while a medication window is open.
-* Optional ONNX object detector every few seconds (env AI_CORE_DETECTOR_MODEL).
+* ONNX object detector every few seconds: models/object_detector/*.onnx, or env AI_CORE_DETECTOR_MODEL
+  ("off" disables it).
 * Timers tick once a second even when nobody is in view (medication reminders).
 * When a medication window opens (5 minutes before the dose) the camera is switched on through
   ``wake_camera`` so intake can be watched even if the camera had been stopped.
@@ -60,7 +61,11 @@ class AICoreRuntime:
         self.camera = camera_manager
         self.provider = patient_provider
         self.period = 1.0 / max(1.0, fps)
-        self.detector_model = detector_model if detector_model is not None else os.getenv("AI_CORE_DETECTOR_MODEL") or None
+        if detector_model is None:
+            from shared.vision.detect import default_model_path
+
+            detector_model = default_model_path()
+        self.detector_model = detector_model or None
         self.detector_interval = detector_interval
         self.clock = clock
         self.wake_camera = wake_camera

@@ -83,7 +83,8 @@ def start_ai_core(window):
 
         cloud = cloud_settings()
         if cloud:
-            runtime = CloudDeviceRuntime(HttpTransport(*cloud), window.camera_manager, provider, speak, wake_camera=wake)
+            runtime = CloudDeviceRuntime(HttpTransport(*cloud), window.camera_manager, provider, speak, wake_camera=wake,
+                                         db=window.unified_db)
         else:
             runtime = AICoreRuntime(window.unified_db, window.camera_manager, provider, speak, wake_camera=wake)
         if runtime.start():
@@ -106,10 +107,14 @@ def stop_ai_core(runtime) -> None:
 
 def voice_reply(patient_id: str | None, transcript: str) -> str | None:
     """Answer utterances owned by the AI features ('kính của tôi đâu', fall check-in replies)."""
-    if not patient_id or not transcript or _runtime is None:
+    if not patient_id or not transcript:
         return None
     try:
-        reply = _runtime.handle_transcript(patient_id, transcript)
+        from features.voice_assistant.clock_answers import answer as clock_answer
+
+        reply = clock_answer(transcript)  # "mấy giờ rồi", "hôm nay thứ mấy": works offline, no AI core needed
+        if reply is None and _runtime is not None:
+            reply = _runtime.handle_transcript(patient_id, transcript)
         if reply:
             try:
                 from features.voice_assistant.voice_ai.audio.tts_player import get_tts_coordinator

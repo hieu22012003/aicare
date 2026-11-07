@@ -24,3 +24,6 @@ pydantic>=2.10.0
 
 # IANA timezone database required by zoneinfo on Windows
 tzdata>=2024.1
+
+# Object finder: ONNX detector (models/object_detector/dfine_s_coco.onnx)
+onnxruntime>=1.18

@@ -36,7 +36,7 @@ class RehabilitationAdapter:
         self._active_exercise = "arm_raise"
 
     def select_exercise(self, exercise_id: str, target_reps: Optional[int] = None) -> None:
-        """Select active exercise ('sit_to_stand', 'arm_raise', 'marching')."""
+        """Select active exercise ('sit_to_stand', 'arm_raise', 'marching', 'arm_circles', 'side_bend')."""
         norm_id = exercise_id.lower().replace("-", "_")
         if norm_id in ("arm_raises", "arm_raise", "vươn vai", "nâng tay"):
             norm_id = "arm_raise"
@@ -44,6 +44,10 @@ class RehabilitationAdapter:
             norm_id = "sit_to_stand"
         elif norm_id in ("marching", "march_steps", "đi bộ tại chỗ", "nâng cao đùi"):
             norm_id = "marching"
+        elif norm_id in ("arm_circles", "xoay khớp vai", "xoay vai", "xoay tay"):
+            norm_id = "arm_circles"
+        elif norm_id in ("side_bend", "side_bends", "nghiêng người", "giãn cơ"):
+            norm_id = "side_bend"
 
         self._active_exercise = norm_id
         self.engine.select_exercise(norm_id, target_reps=target_reps)

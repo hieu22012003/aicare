@@ -125,8 +125,18 @@ def daily_summary(db, patient_id: str, day: str | None = None, now: datetime | N
         "current": current,
         "stats_24h": {"observed_seconds": observed, "items": stats},
         "timeline": timeline(db, patient_id, s, e, tz),
+        "face_notes": face_notes(db, patient_id, local_day.isoformat(), now, tz),
         "alerts": alerts(db, patient_id, _iso(start - timedelta(days=6)), e, tz),
     }
+
+
+def face_notes(db, pid: str, day: str, now: datetime, tz) -> list[dict]:
+    try:
+        from features.face_monitoring.sighting_log import unusual_today
+
+        return [dict(n, time=_local(n["at_utc"], tz)) for n in unusual_today(db, pid, day, now, tz)]
+    except Exception:
+        return []
 
 
 def _local(iso: str | None, tz) -> str:
@@ -181,6 +191,13 @@ def timeline(db, pid: str, s: str, e: str, tz) -> list[dict]:
     for r in _rows(db, "SELECT published_at, label, reason FROM emotion_summaries_v2 WHERE patient_id=? AND published_at>=? "
                        "AND published_at<? AND label='Sad'", (pid, s, e)):
         add(r["published_at"], "Phát hiện biểu hiện buồn kéo dài", "emotion", "Đã báo người nhà", "warn")
+    for r in _rows(db, "SELECT who, first_seen_utc, last_seen_utc, appearances, seen_seconds FROM ai_face_sightings "
+                       "WHERE patient_id=? AND first_seen_utc>=? AND first_seen_utc<?", (pid, s, e)):
+        if r["who"] == "patient":
+            add(r["first_seen_utc"], f"Nhận diện khuôn mặt lần đầu trong ngày ({r['appearances']} lần xuất hiện, "
+                                     f"lần cuối {_local(r['last_seen_utc'], tz)})", "face", None, "info")
+        else:
+            add(r["first_seen_utc"], f"Phát hiện người lạ trước camera ({r['appearances']} lần)", "face", "Cần xem", "warn")
     items.sort(key=lambda x: x["at_utc"])
     return items
 
@@ -218,6 +235,9 @@ def alerts(db, pid: str, s: str, e: str, tz) -> list[dict]:
     for r in _rows(db, "SELECT triggered_at_utc, status, rule FROM ai_posture_reminders WHERE patient_id=? AND audience!='elder' "
                        "AND triggered_at_utc>=? AND triggered_at_utc<?", (pid, s, e)):
         add(r["triggered_at_utc"], "posture", "Ngồi/nằm quá lâu", "Đã nhắc", "done")
+    for r in _rows(db, "SELECT first_seen_utc, appearances FROM ai_face_sightings WHERE patient_id=? AND who='stranger' "
+                       "AND first_seen_utc>=? AND first_seen_utc<?", (pid, s, e)):
+        add(r["first_seen_utc"], "face", f"Người lạ trước camera ({r['appearances']} lần)", "Cần xem", "new")
     out.sort(key=lambda x: x["at_utc"], reverse=True)
     return out[:50]
 
@@ -248,3 +268,97 @@ def _date(iso: str, tz) -> str:
         return datetime.fromisoformat(iso).astimezone(tz).strftime("%d/%m")
     except (TypeError, ValueError):
         return ""
+
+
+# ---------------------------------------------------------------- weekly / monthly report
+
+
+def period_report(db, patient_id: str, days: int = 7, now: datetime | None = None) -> dict:
+    """Day-by-day summary for the last ``days`` local days (today included) plus the abnormal events."""
+    days = max(1, min(int(days), 92))
+    now = now or datetime.now(UTC)
+    patient = _row(db, "SELECT full_name, timezone FROM patients WHERE patient_id=?", (patient_id,)) or {}
+    try:
+        tz = ZoneInfo(patient.get("timezone") or "Asia/Ho_Chi_Minh")
+    except Exception:
+        tz = ZoneInfo("Asia/Ho_Chi_Minh")
+    last_day = now.astimezone(tz).date()
+    first_day = last_day - timedelta(days=days - 1)
+    start = datetime.combine(first_day, time.min, tz)
+    end = datetime.combine(last_day + timedelta(days=1), time.min, tz)
+    s, e = _iso(start), _iso(end)
+
+    def local_day(iso: str | None) -> str | None:
+        try:
+            return datetime.fromisoformat(iso).astimezone(tz).date().isoformat()
+        except (TypeError, ValueError):
+            return None
+
+    rows = {}
+    for i in range(days):
+        d = (first_day + timedelta(days=i)).isoformat()
+        rows[d] = {"date": d, "doses": 0, "taken": 0, "camera_verified": 0, "missed": 0, "falls": 0, "sad": 0,
+                   "strangers": 0, "alerts": 0, "exercise_sessions": 0, "exercise_reps": 0,
+                   "lying_h": 0.0, "sitting_h": 0.0, "moving_h": 0.0, "first_seen": None}
+
+    for r in _rows(db, "SELECT scheduled_at_utc, state, action_actor FROM dose_occurrences WHERE patient_id=? AND scheduled_at_utc>=? "
+                       "AND scheduled_at_utc<? AND state!='CANCELLED'", (patient_id, s, e)):
+        d = rows.get(local_day(r["scheduled_at_utc"]))
+        if not d or datetime.fromisoformat(r["scheduled_at_utc"]) > now:
+            continue
+        d["doses"] += 1
+        if r["state"] == "CONFIRMED":
+            d["taken"] += 1
+            d["camera_verified"] += r["action_actor"] == "camera_verified"
+        elif r["state"] in ("MISSED", "SKIPPED", "OVERDUE"):
+            d["missed"] += 1
+    for r in _rows(db, "SELECT posture, started_at_utc, duration_seconds FROM ai_posture_segments WHERE patient_id=? AND started_at_utc>=? "
+                       "AND started_at_utc<?", (patient_id, s, e)):
+        d = rows.get(local_day(r["started_at_utc"]))
+        if d:
+            key = {"LYING": "lying_h", "SITTING": "sitting_h"}.get(r["posture"], "moving_h")
+            d[key] = round(d[key] + float(r["duration_seconds"] or 0) / 3600, 2)
+    for r in _rows(db, "SELECT detected_at_utc FROM ai_fall_events WHERE patient_id=? AND detected_at_utc>=? AND detected_at_utc<?",
+                   (patient_id, s, e)):
+        if (d := rows.get(local_day(r["detected_at_utc"]))):
+            d["falls"] += 1
+    for r in _rows(db, "SELECT published_at FROM emotion_summaries_v2 WHERE patient_id=? AND label='Sad' AND published_at>=? "
+                       "AND published_at<?", (patient_id, s, e)):
+        if (d := rows.get(local_day(r["published_at"]))):
+            d["sad"] += 1
+    for r in _rows(db, "SELECT local_date, who, first_seen_utc, appearances FROM ai_face_sightings WHERE patient_id=? AND local_date>=? "
+                       "AND local_date<=?", (patient_id, first_day.isoformat(), last_day.isoformat())):
+        if (d := rows.get(r["local_date"])):
+            if r["who"] == "stranger":
+                d["strangers"] += r["appearances"]
+            else:
+                d["first_seen"] = _local(r["first_seen_utc"], tz)
+    for r in _rows(db, "SELECT started_at, verified_count FROM rehab_sessions WHERE patient_id=? AND started_at>=? AND started_at<?",
+                   (patient_id, s, e)):
+        if (d := rows.get(local_day(r["started_at"]))):
+            d["exercise_sessions"] += 1
+            d["exercise_reps"] += int(r["verified_count"] or 0)
+    events = alerts(db, patient_id, s, e, tz)
+    for a in events:
+        if (d := rows.get(local_day(a["at_utc"]))):
+            d["alerts"] += 1
+
+    days_list = list(rows.values())
+    for d in days_list:
+        d["adherence"] = round(100 * d["taken"] / d["doses"]) if d["doses"] else None
+    doses = sum(d["doses"] for d in days_list)
+    taken = sum(d["taken"] for d in days_list)
+    observed = [d for d in days_list if d["lying_h"] + d["sitting_h"] + d["moving_h"] > 0]
+    totals = {
+        "doses": doses, "taken": taken, "adherence": round(100 * taken / doses) if doses else None,
+        "camera_verified": sum(d["camera_verified"] for d in days_list),
+        "missed": sum(d["missed"] for d in days_list),
+        "alerts": len(events), "falls": sum(d["falls"] for d in days_list), "sad_days": sum(1 for d in days_list if d["sad"]),
+        "strangers": sum(d["strangers"] for d in days_list),
+        "exercise_sessions": sum(d["exercise_sessions"] for d in days_list),
+        "exercise_days": sum(1 for d in days_list if d["exercise_sessions"]),
+        "avg_moving_h": round(sum(d["moving_h"] for d in observed) / len(observed), 1) if observed else None,
+        "avg_lying_h": round(sum(d["lying_h"] for d in observed) / len(observed), 1) if observed else None,
+    }
+    return {"patient_id": patient_id, "full_name": patient.get("full_name"), "days": days, "from": first_day.isoformat(),
+            "to": last_day.isoformat(), "totals": totals, "by_day": days_list, "abnormal_events": events}

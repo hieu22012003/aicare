@@ -59,3 +59,25 @@ def test_route_and_bad_date():
     code, data = handle_ai_route(db, None, "GET", ["daily"], {"date": "2026-11-05"}, None, PID, "u")
     assert code == 200 and data["date"] == "2026-11-05"
     assert handle_ai_route(db, None, "GET", ["daily"], {"date": "05/11"}, None, PID, "u")[0] == 400
+
+
+def test_weekly_report_counts_doses_alerts_and_activity():
+    from shared.ai_runtime.daily import period_report
+
+    db = setup()
+    add_dose(db)
+    clock = Clock(T0 - 600)
+    brain = AICoreBrain(AICoreStore(db), lambda s: None, clock)
+    for minute in (-6, -4, 0, 11):
+        clock.now = T0 + minute * 60
+        brain.tick(home_patient=PID)
+    db.execute("INSERT INTO ai_posture_segments VALUES ('seg2', ?, 'SITTING', 'CHAIR', ?, ?, 7200, 0.9)",
+               (PID, datetime.fromtimestamp(T0 - 9000, UTC).isoformat(), datetime.fromtimestamp(T0 - 1800, UTC).isoformat()))
+    r = period_report(db, PID, 7, now=datetime.fromtimestamp(T0 + 3600, UTC))
+    from zoneinfo import ZoneInfo
+    assert r["days"] == 7 and len(r["by_day"]) == 7
+    assert r["to"] == datetime.fromtimestamp(T0 + 3600, ZoneInfo("Asia/Ho_Chi_Minh")).date().isoformat()
+    today = r["by_day"][-1]
+    assert today["doses"] == 1 and today["taken"] == 0 and today["adherence"] == 0 and today["sitting_h"] == 2.0
+    assert r["totals"]["alerts"] >= 1 and any("chưa uống" in a["text"] for a in r["abnormal_events"])
+    assert handle_ai_route(db, None, "GET", ["report"], {"days": "30"}, None, PID, "u")[1]["days"] == 30

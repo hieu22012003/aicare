@@ -8,6 +8,10 @@ so no video leaves the home:
     POST /api/device/patients/{id}/detections     object detector output (normalized boxes)
     POST /api/device/patients/{id}/voice          {"text": transcript} -> {"reply": ...}
     GET  /api/device/patients/{id}/commands?after=<id>   speech to play + whether to run Holistic now
+    GET  /api/device/patients/{id}/snapshot       medication plan, doses and music list made on the web
+    POST /api/device/patients/{id}/sync           rows recorded at home (emotion, exercise, vitals, games,
+                                                  face sightings) + dose actions pressed at home
+    GET  /api/device/patients/{id}/music/{track}  family music file (audio bytes)
 
 Auth: header ``X-Device-Key``. AICARE_DEVICE_KEYS = "key1:patient_a|patient_b,key2:*".
 A background ticker drives the medication milestones and posture/fall timers every second.
@@ -229,10 +233,11 @@ def _authorized(headers: dict | None, patient_id: str) -> bool:
 
 
 def handle_device_route(db, method: str, path: str, query: dict, body: dict | None, headers: dict | None):
-    parts = path.strip("/").split("/")  # api device patients {id} {action}
-    if len(parts) != 5 or parts[:3] != ["api", "device", "patients"]:
+    parts = path.strip("/").split("/")  # api device patients {id} {action} [{track_id}]
+    if len(parts) not in (5, 6) or parts[:3] != ["api", "device", "patients"]:
         return 404, {"error": "Endpoint không tồn tại"}
     pid, action = parts[3], parts[4]
+    extra = parts[5] if len(parts) == 6 else None
     if not _authorized(headers, pid):
         return 401, {"error": "Thiếu hoặc sai X-Device-Key cho bệnh nhân này"}
     if not db.fetchone("SELECT 1 FROM patients WHERE patient_id=?", (pid,)):
@@ -249,6 +254,24 @@ def handle_device_route(db, method: str, path: str, query: dict, body: dict | No
         if method == "POST" and action == "voice":
             text = str(body.get("text") or "")[:300]
             return 200, {"reply": service.voice(pid, text) if text else None}
+        if method == "GET" and action == "snapshot" and extra is None:
+            from shared.ai_runtime.replication import snapshot_for_device
+
+            return 200, snapshot_for_device(db, pid)
+        if method == "POST" and action == "sync" and extra is None:
+            from shared.ai_runtime.replication import apply_from_device
+
+            return 200, apply_from_device(db, pid, body)
+        if method == "GET" and action == "music" and extra:
+            from features.music_care.family_music_service import FamilyMusicService
+
+            music = FamilyMusicService(db)
+            row = music.get_track(pid, extra)
+            if not row or not music.audio_path(row).is_file():
+                return 404, {"error": "Không tìm thấy tệp nhạc"}
+            return 200, {"_audio_path": str(music.audio_path(row)), "content_type": row["content_type"]}
+        if extra is not None:
+            return 404, {"error": "Endpoint không tồn tại"}
         if method == "GET" and action == "commands":
             raw = query.get("after", "0")
             raw = raw[0] if isinstance(raw, list) else raw

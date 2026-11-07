@@ -113,7 +113,7 @@ def test_restart_does_not_replay_reminders(env):
     assert len(spoken) == 1 and "chưa uống" in spoken[0]
 
 
-def test_posture_and_fall_in_trial_mode(env):
+def test_posture_and_fall_alerts_on_by_default(env):
     db, store, brain, spoken, clock = env
     t = T0
     for i in range(50):
@@ -123,7 +123,7 @@ def test_posture_and_fall_in_trial_mode(env):
         brain.on_observation(PID, Observation(t + i / 10, landmarks("lying")))
     assert db.fetchone("SELECT posture FROM ai_posture_state WHERE patient_id=?", (PID,))["posture"] == "LYING"
     fall = db.fetchone("SELECT status, trial FROM ai_fall_events")
-    assert fall["trial"] == 1
+    assert fall["trial"] == 0  # alerts are on by default; trial mode is a per-patient setting
     assert any("có sao không" in s for s in spoken)  # check-in prompt spoken
     reply = brain.handle_transcript(PID, "tôi ổn", now=t + 41)
     assert reply.startswith("Vâng")

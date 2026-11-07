@@ -111,11 +111,13 @@ class RiskSignal:
 
 
 class FallConfig(BaseModel):
-    """Per-patient sensitivity. Starting values; tune with labelled data before enabling alerts."""
+    """Per-patient sensitivity. Starting values: tune with labelled data from the real room."""
 
     timezone: str = "Asia/Ho_Chi_Minh"
-    # False = trial mode (rule 8): events are stored and shown, but no email/webhook is sent.
-    alerts_enabled: bool = False
+    # True: a fall that is not answered "I'm OK" is escalated to the family (portal + email).
+    # False = trial mode (rule 8): events are stored and shown, but nobody is alerted.
+    # The family can switch this on the web (Trang chủ > Cài đặt cảnh báo ngã).
+    alerts_enabled: bool = True
     checkin_wait_seconds: float = Field(30, ge=5, le=300)
     second_checkin_wait_seconds: float = Field(15, ge=5, le=300)
     transition_window_seconds: float = Field(2.0, ge=0.5, le=10)

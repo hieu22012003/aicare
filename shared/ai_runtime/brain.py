@@ -59,7 +59,7 @@ class PostureSettings(BaseModel):
 
 
 class FallSettings(BaseModel):
-    config: FallConfig = Field(default_factory=FallConfig)  # alerts_enabled=False: trial mode
+    config: FallConfig = Field(default_factory=FallConfig)  # alerts_enabled=True by default; False = trial mode
     gait: dict = Field(default_factory=dict)
 
 

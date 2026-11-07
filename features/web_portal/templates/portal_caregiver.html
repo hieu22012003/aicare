@@ -104,6 +104,23 @@
     .settings-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; align-items: end; }
     .settings-row label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px; }
     .settings-row select, .settings-row input { width: 100%; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 14px; background: #fff; }
+    .face-notes { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+    .face-note { font-size: 13px; padding: 8px 10px; border-radius: 8px; background: var(--warning-bg, #FFF4DE); color: #8A5300; }
+    .report-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+    .report-head select { padding: 7px 10px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 14px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .kpi { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+    .kpi b { display: block; font-size: 24px; color: var(--navy); }
+    .kpi span { font-size: 12px; color: var(--muted); }
+    .kpi.bad b { color: var(--danger); }
+    .adh-bars { display: flex; align-items: flex-end; gap: 4px; height: 140px; padding: 8px 0 0; border-bottom: 1.5px solid var(--border); overflow-x: auto; }
+    .adh-bar { flex: 1 0 14px; min-width: 14px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+    .adh-bar i { display: block; width: 100%; border-radius: 4px 4px 0 0; background: var(--primary); }
+    .adh-bar i.low { background: var(--danger); }
+    .adh-bar i.none { background: #E2E8F0; height: 4px !important; }
+    .adh-labels { display: flex; gap: 4px; font-size: 10px; color: var(--muted); overflow-x: auto; }
+    .adh-labels span { flex: 1 0 14px; min-width: 14px; text-align: center; }
+    @media print { .sidebar, .tabs, .tab-btn, .report-head select, .report-head button, .med-alert-bar { display: none !important; } .tab-content { display: none !important; } #tab-report { display: block !important; } }
     @media (max-width: 960px) { .home-grid { grid-template-columns: 1fr; } }
     @media (max-width: 560px) { .state-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .donut-wrap { justify-content: center; } }
     .badge-success { background: var(--success-bg); color: var(--success); }
@@ -344,6 +361,7 @@
     <!-- Navigation Tabs -->
     <div class="tabs-nav">
       <button class="tab-btn active" onclick="switchTab('home'); loadHome();">🏠 Trang chủ</button>
+      <button class="tab-btn" onclick="switchTab('report'); loadReport();">📈 Báo cáo tuần/tháng</button>
       <button class="tab-btn" onclick="switchTab('overview')">Tổng quan & Chỉ số sức khỏe</button>
       <button class="tab-btn" onclick="switchTab('vitals-entry')">🩺 Nhập chỉ số sức khỏe</button>
       <button class="tab-btn" onclick="switchTab('medication')">Thuốc & Đơn thuốc</button>
@@ -391,11 +409,22 @@
             </div>
             <div id="medSettingsMsg" style="margin-top:8px;font-size:13px;"></div>
           </div>
+          <div class="card">
+            <div class="card-title">⚠️ Cảnh báo choáng, ngã</div>
+            <label style="display:flex;gap:10px;align-items:flex-start;font-size:14px;cursor:pointer">
+              <input type="checkbox" id="fallAlertsOn" onchange="saveFallSettings()" style="width:18px;height:18px;margin-top:2px">
+              <span><b>Gửi cảnh báo thật cho người nhà</b><br><span style="color:var(--muted);font-size:13px">Khi phát hiện ngã và người dùng không trả lời "tôi ổn",
+                hệ thống báo lên web và gửi email. Tắt để chạy chế độ thử: vẫn ghi nhận nhưng không báo ai.
+                Độ chính xác chưa được kiểm chứng trên dữ liệu thật, nên theo dõi vài ngày đầu.</span></span>
+            </label>
+            <div id="fallSettingsMsg" style="margin-top:8px;font-size:13px;"></div>
+          </div>
         </div>
         <div class="home-stack">
           <div class="card">
             <div class="card-title">Trạng thái sinh hoạt hiện tại</div>
             <div class="state-tiles" id="homeTiles"></div>
+            <div class="face-notes" id="homeFaceNotes"></div>
           </div>
           <div class="card">
             <div class="card-title">Thống kê hoạt động trong ngày <span style="font-size:12px;font-weight:500;color:var(--muted)">24 giờ gần nhất</span></div>
@@ -412,6 +441,36 @@
             </table></div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div id="tab-report" class="tab-content">
+      <div class="card">
+        <div class="report-head">
+          <div class="card-title" style="margin:0;flex:1">Báo cáo tổng hợp <span id="reportRange" style="font-size:13px;font-weight:500;color:var(--muted)"></span></div>
+          <select id="reportDays" onchange="loadReport()" aria-label="Khoảng thời gian">
+            <option value="7">7 ngày qua (tuần)</option><option value="30">30 ngày qua (tháng)</option>
+          </select>
+          <button class="btn-submit" onclick="window.print()" style="padding:8px 14px">🖨️ In / Lưu PDF</button>
+        </div>
+        <div class="kpi-grid" id="reportKpis"></div>
+        <div class="card-title" style="font-size:15px">Tỷ lệ uống thuốc đúng theo ngày</div>
+        <div class="adh-bars" id="reportBars"></div>
+        <div class="adh-labels" id="reportBarLabels"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Chi tiết theo ngày</div>
+        <div class="table-responsive"><table class="home-table">
+          <thead><tr><th>Ngày</th><th>Thuốc (uống/tổng)</th><th>Cảnh báo</th><th>Ngã</th><th>Buồn</th><th>Người lạ</th><th>Tập luyện</th><th>Nằm / Ngồi / Đi lại (giờ)</th><th>Thấy lần đầu</th></tr></thead>
+          <tbody id="reportDaysTable"><tr><td colspan="9">Đang tải...</td></tr></tbody>
+        </table></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Sự kiện bất thường trong kỳ</div>
+        <div class="table-responsive"><table class="home-table">
+          <thead><tr><th style="width:110px">Thời gian</th><th>Sự kiện</th><th style="width:140px">Trạng thái</th></tr></thead>
+          <tbody id="reportEvents"><tr><td colspan="3">Đang tải...</td></tr></tbody>
+        </table></div>
       </div>
     </div>
 
@@ -1188,6 +1247,7 @@
       if (!currentPatientId) return;
       loadHome();
       loadMedMonitorSettings();
+      loadFallSettings();
       loadFamilyMusic();
       loadVoiceRequests();
       loadOverview();
@@ -1438,7 +1498,9 @@
       const exerciseIcons = {
         "arm_raise": "🏋️",
         "sit_to_stand": "🦵",
-        "marching": "🚶"
+        "marching": "🚶",
+        "arm_circles": "🔄",
+        "side_bend": "🤸"
       };
 
       let html = `
@@ -2849,6 +2911,10 @@
         tile(emoIco, "Cảm xúc", c.emotion ? c.emotion.label : "—", c.emotion && c.emotion.key === "Sad" ? "bad" : "ok") +
         tile(alertBad ? "⚠️" : "✅", "Cảnh báo", c.alert ? c.alert.label : "Bình thường", alertBad ? "bad" : "ok");
 
+      const notes = d.face_notes || [];
+      document.getElementById("homeFaceNotes").innerHTML = notes.map(n =>
+        `<div class="face-note">👁️ ${aiEsc(n.time)} · ${aiEsc(n.text)}</div>`).join("");
+
       const items = (d.stats_24h && d.stats_24h.items) || [];
       const total = items.reduce((s, x) => s + x.seconds, 0);
       let acc = 0;
@@ -2872,6 +2938,69 @@
       document.getElementById("homeAlerts").innerHTML = al.length ? al.map(a =>
         `<tr><td><b>${aiEsc(a.time)}</b> <span style="color:var(--muted);font-size:12px">${aiEsc(a.date)}</span></td><td>${aiEsc(a.text)}</td><td>${badge(a.status, a.status_key)}</td></tr>`).join("")
         : `<tr><td colspan="3" style="color:var(--muted)">Không có cảnh báo trong 7 ngày qua.</td></tr>`;
+    }
+
+    async function loadReport() {
+      if (!currentPatientId) return;
+      const pid = currentPatientId;
+      const days = document.getElementById("reportDays").value || "7";
+      const r = await apiCall(`/api/patients/${encodeURIComponent(pid)}/ai/report?days=${days}`);
+      if (pid !== currentPatientId || !r || r.error) return;
+      const fmt = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("vi-VN", {day: "2-digit", month: "2-digit"});
+      document.getElementById("reportRange").textContent = `${aiEsc(r.full_name || "")} · ${fmt(r.from)} – ${fmt(r.to)}`;
+      const t = r.totals;
+      const kpi = (val, label, bad) => `<div class="kpi ${bad ? "bad" : ""}"><b>${aiEsc(val)}</b><span>${label}</span></div>`;
+      document.getElementById("reportKpis").innerHTML =
+        kpi(t.adherence === null ? "—" : `${t.adherence}%`, `Uống thuốc đúng (${t.taken}/${t.doses} liều)`, t.adherence !== null && t.adherence < 80) +
+        kpi(t.camera_verified, "Liều camera xác nhận") +
+        kpi(t.alerts, "Cảnh báo trong kỳ", t.alerts > 0) +
+        kpi(t.falls, "Dấu hiệu ngã", t.falls > 0) +
+        kpi(t.sad_days, "Ngày có biểu hiện buồn", t.sad_days > 0) +
+        kpi(`${t.exercise_days}/${r.days}`, "Ngày có tập luyện") +
+        kpi(t.avg_moving_h === null ? "—" : `${t.avg_moving_h}h`, "Đi lại, đứng TB/ngày") +
+        kpi(t.strangers, "Lần có người lạ", t.strangers > 0);
+      document.getElementById("reportBars").innerHTML = r.by_day.map(d => {
+        const cls = d.adherence === null ? "none" : d.adherence < 80 ? "low" : "";
+        const h = d.adherence === null ? 4 : Math.max(4, d.adherence);
+        return `<div class="adh-bar" title="${aiEsc(d.date)}: ${d.adherence === null ? "không có liều" : d.adherence + "%"}"><i class="${cls}" style="height:${h}%"></i></div>`;
+      }).join("");
+      const step = r.days > 10 ? 5 : 1;
+      document.getElementById("reportBarLabels").innerHTML = r.by_day.map((d, i) => `<span>${i % step === 0 || i === r.by_day.length - 1 ? fmt(d.date) : ""}</span>`).join("");
+      document.getElementById("reportDaysTable").innerHTML = r.by_day.slice().reverse().map(d => `<tr>
+        <td><b>${fmt(d.date)}</b></td>
+        <td>${d.doses ? `${d.taken}/${d.doses}` : "—"}${d.missed ? ` <span class="badge badge-danger">${d.missed} bỏ lỡ</span>` : ""}</td>
+        <td>${d.alerts || "—"}</td><td>${d.falls || "—"}</td><td>${d.sad || "—"}</td><td>${d.strangers || "—"}</td>
+        <td>${d.exercise_sessions ? `${d.exercise_sessions} buổi · ${d.exercise_reps} lần` : "—"}</td>
+        <td>${d.lying_h} / ${d.sitting_h} / ${d.moving_h}</td><td>${aiEsc(d.first_seen || "—")}</td></tr>`).join("");
+      const badge = (text, key) => text ? `<span class="badge ${HOME_STATUS_BADGE[key] || "badge-primary"}">${aiEsc(text)}</span>` : "";
+      const ev = r.abnormal_events || [];
+      document.getElementById("reportEvents").innerHTML = ev.length ? ev.map(a =>
+        `<tr><td><b>${aiEsc(a.time)}</b> <span style="color:var(--muted);font-size:12px">${aiEsc(a.date)}</span></td><td>${aiEsc(a.text)}</td><td>${badge(a.status, a.status_key)}</td></tr>`).join("")
+        : `<tr><td colspan="3" style="color:var(--muted)">Không có sự kiện bất thường trong kỳ.</td></tr>`;
+    }
+
+    let fallSettingsCache = null;
+    async function loadFallSettings() {
+      if (!currentPatientId) return;
+      const r = await apiCall(`/api/patients/${encodeURIComponent(currentPatientId)}/ai/settings/fall`);
+      if (!r || r.error || !r.config) return;
+      fallSettingsCache = r.config;
+      document.getElementById("fallAlertsOn").checked = !!r.config.config.alerts_enabled;
+    }
+    async function saveFallSettings() {
+      const msg = document.getElementById("fallSettingsMsg");
+      if (!fallSettingsCache) await loadFallSettings();
+      if (!fallSettingsCache) { msg.textContent = "Không đọc được cài đặt hiện tại."; return; }
+      const cfg = JSON.parse(JSON.stringify(fallSettingsCache));
+      cfg.config.alerts_enabled = document.getElementById("fallAlertsOn").checked;
+      const r = await apiCall(`/api/patients/${encodeURIComponent(currentPatientId)}/ai/settings/fall`, "PUT", {config: cfg});
+      if (r && !r.error) {
+        fallSettingsCache = r.config;
+        msg.style.color = "var(--success)";
+        msg.textContent = cfg.config.alerts_enabled ? "✅ Đã bật cảnh báo ngã thật." : "✅ Đã chuyển sang chế độ thử (không gửi cảnh báo).";
+      } else {
+        msg.style.color = "var(--danger)"; msg.textContent = (r && r.error) || "Không lưu được cài đặt.";
+      }
     }
 
     let medSettingsCache = null;

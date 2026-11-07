@@ -47,6 +47,17 @@ Người nhà có thể đổi cách xưng hô (bác, anh, ông, bà…), số p
 
 Mã nguồn: `features/medication/intake_monitoring/` (bộ nhận diện và mốc thời gian) và `shared/ai_runtime/` (bật camera, nói, gửi lên server).
 
+## Các bổ sung khác
+
+- **Tìm đồ vật (7):** model `models/object_detector/dfine_s_coco.onnx` (D-FINE-S, COCO 80 loại, Apache-2.0) được app tự nạp. Tìm được điện thoại, điều khiển, cốc, chai, sách, kéo… Kính mắt không có trong COCO.
+- **Choáng, ngã (4):** mặc định gửi cảnh báo thật. Người nhà tắt được ở Trang chủ (chuyển về chế độ thử).
+- **Khuôn mặt (1):** ghi giờ xuất hiện lần đầu, lần cuối và số lần xuất hiện mỗi ngày. Báo khi có người lạ, khi xuất hiện muộn hơn thường lệ 2 giờ, hoặc khi đến giờ quen mà chưa thấy.
+- **Cảm xúc và âm nhạc (2, 8):** khi bản tổng hợp cảm xúc là "Buồn", app nói một lời gợi ý và tự mở nhạc (ưu tiên nhạc người nhà gửi).
+- **Giọng nói (6):** trả lời "mấy giờ rồi", "hôm nay thứ mấy, ngày mấy".
+- **Tập luyện (9):** thêm bài "Xoay khớp vai" và "Nghiêng người giãn cơ".
+- **Website (10):** thêm tab "Báo cáo tuần/tháng": tỷ lệ uống thuốc, cảnh báo, ngã, ngày buồn, tập luyện, thời gian đi lại theo ngày. In hoặc lưu PDF được.
+- **Đồng bộ nhà ↔ Render:** app tại nhà lấy đơn thuốc và nhạc từ web về, rồi gửi lên các nút "Đã uống", cảm xúc, buổi tập, chỉ số nhập ở nhà, trò chơi, lần xuất hiện khuôn mặt và đồ vật nhìn thấy (`shared/ai_runtime/replication.py`).
+
 ## Chạy thử
 
 ```bash

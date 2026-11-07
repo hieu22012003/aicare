@@ -43,6 +43,7 @@ backups/
 *.pt
 *.pth
 *.onnx
+!models/object_detector/*.onnx
 *.tflite
 *.task
 *.caffemodel

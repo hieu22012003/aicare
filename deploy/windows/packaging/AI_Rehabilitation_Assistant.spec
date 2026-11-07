@@ -35,6 +35,7 @@ datas = [
     # Static model binaries
     (str(PROJECT_ROOT / 'features' / 'face_monitoring' / 'standalone' / 'models'), os.path.join('features', 'face_monitoring', 'standalone', 'models')),
     (str(PROJECT_ROOT / 'features' / 'emotion' / 'model' / 'models'), os.path.join('features', 'emotion', 'model', 'models')),
+    (str(PROJECT_ROOT / 'models' / 'object_detector'), os.path.join('models', 'object_detector')),
     # Baseline shared structures & default data templates
     # Configuration template
     (str(PROJECT_ROOT / '.env.example'), '.'),
