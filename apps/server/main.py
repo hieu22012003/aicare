@@ -16,6 +16,10 @@ Environment
                             if it does not exist yet (useful on hosts without a persistent disk)
     AICARE_BOOTSTRAP_CLINICIAN  "email|password|Full name|patient_id": same for a doctor account
     EMAIL_USERNAME / EMAIL_PASSWORD / EMAIL_HOST / EMAIL_PORT   caregiver email alerts (SMTP)
+    AICARE_KEEPALIVE        1 = request our own public URL every 10 minutes so a Render Free instance never
+                            spins down (spin-down wipes the /tmp database). Uses the workspace's Free hours
+                            (750/month shared by all Free services): turn it on only while someone is testing.
+    AICARE_PUBLIC_URL       public URL for the keep-alive; Render's RENDER_EXTERNAL_URL is used when unset
 """
 
 from __future__ import annotations
@@ -110,6 +114,33 @@ def ensure_bootstrap_caregiver(db) -> None:
         log.error("Could not create caregiver %s: %s", email, res.get("error"))
 
 
+def start_keepalive(interval_s: float = 600.0):
+    """Render Free spins an instance down after 15 min without inbound traffic, and the local SQLite file goes
+    with it. A request to our own public URL goes through Render's proxy and counts as inbound traffic."""
+    if os.getenv("AICARE_KEEPALIVE", "").strip().lower() not in ("1", "true", "yes", "on"):
+        return None
+    base = (os.getenv("AICARE_PUBLIC_URL") or os.getenv("RENDER_EXTERNAL_URL") or "").rstrip("/")
+    if not base.startswith("http"):
+        log.warning("AICARE_KEEPALIVE is on but no public URL (AICARE_PUBLIC_URL / RENDER_EXTERNAL_URL): disabled")
+        return None
+    import threading
+    import urllib.request
+
+    stop = threading.Event()
+
+    def run():
+        while not stop.wait(interval_s):
+            try:
+                with urllib.request.urlopen(f"{base}/api/health", timeout=30) as r:
+                    r.read(64)
+            except Exception as e:  # a failed ping only means the next one tries again
+                log.warning("keep-alive ping failed: %s", e)
+
+    threading.Thread(target=run, name="KeepAlive", daemon=True).start()
+    log.info("Keep-alive on: %s/api/health every %d s", base, int(interval_s))
+    return stop
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     from shared.ai_runtime.device_api import BackendAIService, set_service
@@ -127,6 +158,7 @@ def main() -> None:
     ai = BackendAIService(db)
     set_service(ai)
     ai.start()
+    start_keepalive()
 
     server = HealthcareWebServer(db, host=os.getenv("HOST", "0.0.0.0"), port=int(os.getenv("PORT", "8080")))
 

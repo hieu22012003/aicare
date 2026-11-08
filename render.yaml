@@ -28,6 +28,9 @@ services:
         sync: false
       - key: AICARE_DEVICE_KEYS
         sync: false
+      # 1 = never spin down (keeps the /tmp database). Uses the workspace's 750 Free hours: on only while testing.
+      - key: AICARE_KEEPALIVE
+        sync: false
       - key: EMAIL_USERNAME
         sync: false
       - key: EMAIL_PASSWORD
