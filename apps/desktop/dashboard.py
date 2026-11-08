@@ -661,7 +661,7 @@ class DashboardWindow(QMainWindow):
             self._enable_local_voice()
 
         # 4. BOTTOM STATUS BAR
-        self.status_bar_lbl = QLabel(f"Thời gian: {datetime.now().strftime('%H:%M:%S %d/%m/%Y')} | Nhắc thuốc khi ứng dụng đang mở")
+        self.status_bar_lbl = QLabel(f"Thông báo lúc {datetime.now().strftime('%H:%M:%S')}: Nhắc thuốc khi ứng dụng đang mở")
         self.status_bar_lbl.setObjectName("BottomStatusBar")
         self.status_bar_lbl.setWordWrap(True)
         root_layout.addWidget(self.status_bar_lbl)
@@ -716,8 +716,12 @@ class DashboardWindow(QMainWindow):
         if not hardware_camera or now_pts - self._last_emotion_sample_pts < 1.0:
             return
         self._last_emotion_sample_pts = now_pts
-        # Recheck identity on this clean frame, including while doing rehab.
-        face = self.router.face_adapter.recognize_face(frame)
+        # Monitor mode already recognised this very frame in draw_tracking_overlay: reuse it (running the
+        # recognizer twice on one frame skewed the identity tracking). Rehab mode has no face overlay: check here.
+        if self.camera_manager.get_mode() == "rehabilitation":
+            face = self.router.face_adapter.recognize_face(frame)
+        else:
+            face = self.router.face_adapter.get_latest_recognition()
         if face.get('status') != 'recognized' or not face.get('patient_id'):
             return
         patient_id = self._resolve_patient_id(face['patient_id'])
@@ -1317,6 +1321,7 @@ class DashboardWindow(QMainWindow):
         """Periodic real-time UI refresh every 1 second."""
         now_dt = datetime.now()
         self.lbl_clock.setText(now_dt.strftime("%H:%M:%S | %d/%m/%Y"))
+        self._refresh_camera_badge()
 
         # Live sync rehab plans configured by caregiver from web portal every 2 seconds
         now_ts = now_dt.timestamp()
@@ -1328,12 +1333,21 @@ class DashboardWindow(QMainWindow):
         if self.current_source_mode == "camera":
             self.update_dashboard_ui()
 
+    def _refresh_camera_badge(self) -> None:
+        """The badge was set once at start-up, before the camera had opened, so it kept saying "Giả lập"."""
+        cm = self.camera_manager
+        is_hw = bool(cm.is_hardware_camera() and getattr(cm, "latest_capture_valid", False))
+        if getattr(self, "_cam_badge_hw", None) is is_hw:
+            return
+        self._cam_badge_hw = is_hw
+        self.lbl_cam_badge.setText("● Camera: Phần cứng" if is_hw else "● Camera: Giả lập")
+        self.lbl_cam_badge.setStyleSheet(get_badge_stylesheet("success" if is_hw else "warning", font_size=12,
+                                                              padding="4px 10px", rounded=10))
+
     def show_status_message(self, message: str) -> None:
         """Display status notification in bottom bar."""
         now_dt = datetime.now()
-        self.status_bar_lbl.setText(
-            f"Thời gian: {now_dt.strftime('%H:%M:%S %d/%m/%Y')} | {message}"
-        )
+        self.status_bar_lbl.setText(f"Thông báo lúc {now_dt.strftime('%H:%M:%S')}: {message}")
 
     def closeEvent(self, event) -> None:
         """Clean shutdown of camera engine and video players."""

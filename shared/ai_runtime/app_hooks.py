@@ -66,9 +66,15 @@ def start_ai_core(window):
             return None
 
         def provider():
-            face = window.router.face_adapter.get_latest_recognition() or {}
+            fa = window.router.face_adapter
+            face = fa.get_latest_recognition() or {}
             pid = getattr(window, "_active_resolved_pid", None) or getattr(window.today_todo_widget, "patient_id", None)
-            return pid, face.get("status") == "recognized"
+            # Taking a pill puts a hand in front of the mouth: the face is often not recognisable in exactly those
+            # frames. The patient counts as present if recognised within the last 30 s and no stranger since.
+            present = face.get("status") == "recognized"
+            if not present and hasattr(fa, "present_patient"):
+                present = fa.present_patient(30.0) is not None
+            return pid, present
 
         def speak(text: str) -> None:
             try:

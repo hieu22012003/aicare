@@ -172,6 +172,8 @@ def run_checks() -> int:
     models_to_check = [
         ("Face Detector (PB)", PROJECT_ROOT / "features" / "face_monitoring" / "standalone" / "models" / "opencv_face_detector_uint8.pb", True),
         ("Face Detector (TXT)", PROJECT_ROOT / "features" / "face_monitoring" / "standalone" / "models" / "opencv_face_detector.pbtxt", True),
+        ("Face Recognizer SFace", PROJECT_ROOT / "features" / "face_monitoring" / "standalone" / "models" / "face_recognition_sface_2021dec.onnx", True),
+        ("Face Landmarks YuNet", PROJECT_ROOT / "features" / "face_monitoring" / "standalone" / "models" / "face_detection_yunet_2023mar.onnx", True),
         ("Emotion ExpressionNet", PROJECT_ROOT / "features" / "emotion" / "model" / "models" / "expression_net.pth", True),
         ("Age Net Caffe", PROJECT_ROOT / "features" / "face_monitoring" / "standalone" / "models" / "age_net.caffemodel", False),
         ("Gender Net Caffe", PROJECT_ROOT / "features" / "face_monitoring" / "standalone" / "models" / "gender_net.caffemodel", False),

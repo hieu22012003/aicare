@@ -52,6 +52,7 @@ Mã nguồn: `features/medication/intake_monitoring/` (bộ nhận diện và m�
 - **Tìm đồ vật (7):** model `models/object_detector/dfine_s_coco.onnx` (D-FINE-S, COCO 80 loại, Apache-2.0) được app tự nạp. Tìm được điện thoại, điều khiển, cốc, chai, sách, kéo… Kính mắt không có trong COCO.
 - **Choáng, ngã (4):** mặc định gửi cảnh báo thật. Người nhà tắt được ở Trang chủ (chuyển về chế độ thử).
 - **Khuôn mặt (1):** ghi giờ xuất hiện lần đầu, lần cuối và số lần xuất hiện mỗi ngày. Báo khi có người lạ, khi xuất hiện muộn hơn thường lệ 2 giờ, hoặc khi đến giờ quen mà chưa thấy.
+  Nhận diện dùng SFace (OpenCV, `features/face_monitoring/standalone/models/face_recognition_sface_2021dec.onnx` + `face_detection_yunet_2023mar.onnx`), giữ danh tính khi tay che miệng hoặc quay đầu; chỉ báo "Người lạ" khi khuôn mặt khác hẳn liên tục ≥ 1,5 giây. Thiếu 2 file này thì app tự quay về LBPH. Chỉnh bằng biến môi trường `AICARE_SFACE_ACCEPT` (mặc định 0.42), `AICARE_SFACE_REJECT` (0.28), `AICARE_FACE_HOLD_SECONDS` (10).
 - **Cảm xúc và âm nhạc (2, 8):** khi bản tổng hợp cảm xúc là "Buồn", app nói một lời gợi ý và tự mở nhạc (ưu tiên nhạc người nhà gửi).
 - **Giọng nói (6):** trả lời "mấy giờ rồi", "hôm nay thứ mấy, ngày mấy".
 - **Tập luyện (9):** thêm bài "Xoay khớp vai" và "Nghiêng người giãn cơ".

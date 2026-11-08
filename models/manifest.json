@@ -34,6 +34,26 @@
       "category": "vision_face"
     },
     {
+      "id": "opencv-sface-recognizer",
+      "name": "OpenCV SFace Face Recognizer (2021dec)",
+      "target_path": "features/face_monitoring/standalone/models/face_recognition_sface_2021dec.onnx",
+      "size_bytes": 38696353,
+      "sha256": "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79",
+      "source_url": "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx",
+      "required_for_core": true,
+      "category": "vision_face"
+    },
+    {
+      "id": "opencv-yunet-detector",
+      "name": "OpenCV YuNet Face Detector (2023mar)",
+      "target_path": "features/face_monitoring/standalone/models/face_detection_yunet_2023mar.onnx",
+      "size_bytes": 232589,
+      "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+      "source_url": "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
+      "required_for_core": true,
+      "category": "vision_face"
+    },
+    {
       "id": "expression-net-pth",
       "name": "ExpressionNet MLP Weight",
       "target_path": "features/emotion/model/models/expression_net.pth",

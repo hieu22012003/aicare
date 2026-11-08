@@ -44,6 +44,10 @@ if EMOTION_ROOT not in sys.path:
 
 logger = logging.getLogger("EmotionAdapter")
 
+EMOTION_TAU_SECONDS = 1.5  # time constant of the probability smoothing
+EMOTION_SWITCH_MARGIN = 0.08  # another state must lead the shown one by this much ...
+EMOTION_SWITCH_SECONDS = 1.0  # ... for this long before the shown label changes
+
 # 3 Focused Emotion States
 EMOTION_CLASSES = ["Neutral", "Happy", "Sad"]
 
@@ -75,6 +79,11 @@ class EmotionAdapter:
         self._last_confidence = 0.0
         self._last_face_time = 0.0
         self.face_ttl = 1.2  # Seconds before stale emotion is cleared
+        self._ema: Optional[np.ndarray] = None
+        self._ema_ts = 0.0
+        self._stable_idx: Optional[int] = None
+        self._challenger: Optional[int] = None
+        self._challenger_since = 0.0
         self._model = None
         self._face_mesh = None
         self._face_landmarker = None
@@ -281,11 +290,14 @@ class EmotionAdapter:
                 else:
                     combined_probs = facs_probs
 
-                # 3. Sliding window temporal smoothing
+                # 3. Temporal smoothing. A 10-frame window is only ~0.3 s at 30 fps, so the label jumped
+                #    Vui vẻ / Bình thường / Buồn bã several times a second. Time-based EMA (tau 1.5 s) plus
+                #    hysteresis: the label changes only when another state leads by EMOTION_SWITCH_MARGIN
+                #    for EMOTION_SWITCH_SECONDS.
                 self._prob_history.append(combined_probs)
-                smoothed_probs = np.mean(np.stack(self._prob_history), axis=0)
+                smoothed_probs = self._smooth(combined_probs, now)
 
-                pred_idx = int(np.argmax(smoothed_probs))
+                pred_idx = self._stable_label(smoothed_probs, now)
                 dominant_en = self.classes[pred_idx]
                 dominant_vi = EMOTION_VI_MAP.get(dominant_en, "Bình thường")
                 confidence = float(smoothed_probs[pred_idx])
@@ -314,6 +326,7 @@ class EmotionAdapter:
             else:
                 # TTL expired: clear history and reset to Unknown / Không phát hiện mặt
                 self._prob_history.clear()
+                self._ema, self._stable_idx, self._challenger = None, None, None
                 dominant_en = "Unknown"
                 dominant_vi = "Không phát hiện mặt"
                 confidence = 0.0
@@ -335,15 +348,38 @@ class EmotionAdapter:
         self._persist_result(result)
         return result
 
+    def _smooth(self, probs: np.ndarray, now: float) -> np.ndarray:
+        if self._ema is None or now - self._ema_ts > self.face_ttl:
+            self._ema = np.asarray(probs, dtype=np.float32).copy()
+        else:
+            alpha = 1.0 - float(np.exp(-max(0.0, now - self._ema_ts) / EMOTION_TAU_SECONDS))
+            self._ema = (1.0 - alpha) * self._ema + alpha * np.asarray(probs, dtype=np.float32)
+        self._ema_ts = now
+        return self._ema / max(1e-6, float(np.sum(self._ema)))
+
+    def _stable_label(self, probs: np.ndarray, now: float) -> int:
+        best = int(np.argmax(probs))
+        cur = self._stable_idx
+        if cur is None:
+            self._stable_idx, self._challenger, self._challenger_since = best, None, 0.0
+            return best
+        if best == cur or probs[best] - probs[cur] < EMOTION_SWITCH_MARGIN:
+            self._challenger = None
+            return cur
+        if self._challenger != best:
+            self._challenger, self._challenger_since = best, now
+        elif now - self._challenger_since >= EMOTION_SWITCH_SECONDS:
+            self._stable_idx, self._challenger = best, None
+            return best
+        return cur
+
     def draw_emotion_badge(self, frame: np.ndarray, emotion_vi: str, confidence: float) -> np.ndarray:
         """Render a compact, high-contrast emotion pill badge at top right of video frame."""
         h, w = frame.shape[:2]
         if emotion_vi in ("Không phát hiện mặt", "Chưa phát hiện", "Unknown") or confidence <= 0.0:
             return frame  # Keep frame clean; outer UI card displays scanning status
 
-        emoji_map = {"Vui vẻ": "😊", "Buồn bã": "😔", "Bình thường": "😐"}
-        icon = emoji_map.get(emotion_vi, "😊")
-        badge_text = f"{icon} {emotion_vi}"
+        badge_text = emotion_vi  # no emoji: the overlay font has no emoji glyphs (they showed as boxes)
 
         if emotion_vi == "Vui vẻ":
             border_color = (0, 220, 100)  # Green accent

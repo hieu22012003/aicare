@@ -369,7 +369,7 @@ self_hits = strangers = stranger_hits = 0
 tiles = []
 for key, img in people.items():
     for s in range(500, 504):
-        fa._pred_history.clear(); fa._consecutive_unknown_count = 0; fa._last_recognized_time = 0; fa._last_stable_pid = None
+        fa.reset_tracking()
         frame = cam_view(img, s)
         r = fa.recognize_face(frame)
         ok = r.get("status") == "recognized"

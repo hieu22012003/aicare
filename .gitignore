@@ -44,6 +44,8 @@ backups/
 *.pth
 *.onnx
 !models/object_detector/*.onnx
+!features/face_monitoring/standalone/models/face_recognition_sface_2021dec.onnx
+!features/face_monitoring/standalone/models/face_detection_yunet_2023mar.onnx
 *.tflite
 *.task
 *.caffemodel

@@ -127,6 +127,16 @@ def _get_text_patch(
     return patch_data
 
 
+_EMOJI_RANGES = ((0x1F000, 0x1FAFF), (0x2600, 0x27BF), (0x2B00, 0x2BFF), (0xFE00, 0xFE0F), (0x200D, 0x200D),
+                 (0x2190, 0x21FF), (0x25A0, 0x25FF), (0x2700, 0x27BF), (0x2300, 0x23FF))
+
+
+def strip_emoji(text: str) -> str:
+    """Arial/Segoe/Tahoma (the overlay fonts) have no emoji glyphs: they rendered as empty boxes on the video."""
+    out = "".join(ch for ch in text if not any(lo <= ord(ch) <= hi for lo, hi in _EMOJI_RANGES))
+    return " ".join(out.split()) if out != text else text
+
+
 def draw_vietnamese_text(
     frame: np.ndarray,
     text: str,
@@ -149,6 +159,7 @@ def draw_vietnamese_text(
         stroke_color: Text outline stroke color in (B, G, R).
         stroke_width: Outline stroke width in pixels.
     """
+    text = strip_emoji(text)
     if not text:
         return
 
@@ -180,6 +191,7 @@ def draw_vietnamese_text(
 
 def get_text_size(text: str, font_size: int = 18, stroke_width: int = 2) -> Tuple[int, int]:
     """Measure exact bounding box dimensions (width, height) of rendered text."""
+    text = strip_emoji(text)
     font = _get_font(font_size)
     if font is None:
         return len(text) * int(font_size * 0.6), font_size

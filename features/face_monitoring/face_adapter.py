@@ -31,10 +31,33 @@ from shared.config import (
 
 logger = logging.getLogger("FaceAdapter")
 
-# LBPH distance below which a face is the registered person. Measured on 15 faces (same-camera variation:
-# the same person 17-20, other people 41+): 58 accepted 51 % of strangers as the patient, 40 accepted none.
-# Register 15-20 photos in different light and angles; tune with AICARE_FACE_THRESHOLD if the elder is missed.
-RECOGNITION_THRESHOLD = float(os.getenv("AICARE_FACE_THRESHOLD", "40"))
+# ---------------------------------------------------------------------------------------------------
+# Recognition engines
+#
+# 1. SFace (OpenCV FaceRecognizerSF, deep embedding, cosine similarity) + YuNet landmarks for alignment.
+#    Used whenever models/face_recognition_sface_2021dec.onnx and face_detection_yunet_2023mar.onnx exist
+#    (scripts/download_models.py fetches them). Measured on the customer's own webcam recordings
+#    (dim room, glasses, 2 sessions): same person median similarity 0.81, 10th percentile 0.67;
+#    OpenCV's published decision threshold for this model is 0.363 (LFW).
+# 2. LBPH (legacy fallback when the ONNX files are missing). On the same recordings the same person scored
+#    LBPH distance 37-52 (median 45), so the old threshold 40 rejected ~74% of the patient's own frames:
+#    the "Người lạ" flicker in the field. The old 17-20 figure came from testing on augmented copies of the
+#    registration photo itself.
+#
+# A decision is never taken from one frame: an identity is kept while the same face is tracked, and a
+# "stranger" verdict needs several clearly-different frames over >= 1.5 s (a hand in front of the mouth while
+# taking a pill, a head turn or a blink only make a frame "unsure", never "stranger").
+# ---------------------------------------------------------------------------------------------------
+FACE_ENGINE = os.getenv("AICARE_FACE_ENGINE", "auto").strip().lower()  # auto | sface | lbph
+SFACE_ACCEPT = float(os.getenv("AICARE_SFACE_ACCEPT", "0.42"))  # >= : this frame is the registered person
+SFACE_REJECT = float(os.getenv("AICARE_SFACE_REJECT", "0.28"))  # <  : this frame is clearly someone else
+RECOGNITION_THRESHOLD = float(os.getenv("AICARE_FACE_THRESHOLD", "52"))  # LBPH distance accept (fallback)
+LBPH_REJECT = float(os.getenv("AICARE_FACE_REJECT", "68"))  # LBPH distance above which a frame is "different"
+IDENTITY_HOLD_SECONDS = float(os.getenv("AICARE_FACE_HOLD_SECONDS", "10"))  # keep identity while tracked
+STRANGER_MIN_FRAMES = 4
+STRANGER_MIN_SECONDS = 1.5
+SFACE_MODEL_FILE = "face_recognition_sface_2021dec.onnx"
+YUNET_MODEL_FILE = "face_detection_yunet_2023mar.onnx"
 
 
 class FaceAdapter:
@@ -70,6 +93,12 @@ class FaceAdapter:
         self._id_to_label: Dict[str, int] = {}
         self._is_trained: bool = False
 
+        # Deep embedding engine (SFace) when its model files are present
+        self._sface = None
+        self._yunet = None
+        self._gallery: Dict[str, np.ndarray] = {}
+        self._load_sface()
+
         # Load & train database on start
         self.train_recognizer()
 
@@ -81,7 +110,96 @@ class FaceAdapter:
         self._consecutive_unknown_count: int = 0
         self._last_stable_pid: Optional[str] = None
         self._last_recognized_time: float = 0.0
-        self._identity_ttl: float = 2.0  # seconds to preserve identity during head turn or bowing
+        self._identity_ttl: float = IDENTITY_HOLD_SECONDS
+        # Tracked identity (see module header)
+        self._track_pid: Optional[str] = None
+        self._track_last_match: float = 0.0
+        self._track_best_score: float = 0.0
+        self._track_box: Optional[Tuple[int, int, int, int]] = None
+        self._reject_count: int = 0
+        self._reject_since: Optional[float] = None
+        self._last_reject_ts: float = 0.0
+        self._last_face_seen: float = 0.0
+        self._stranger_confirmed_at: float = 0.0
+        self._last_embed_ts: float = 0.0
+
+    def _model_path(self, name: str) -> Path:
+        p = resource_path(f"features/face_monitoring/standalone/models/{name}")
+        return p if p.exists() else self.module_dir / "models" / name
+
+    def _load_sface(self) -> None:
+        """Load SFace + YuNet (OpenCV >= 4.5.4). Missing files or old OpenCV: LBPH fallback."""
+        if FACE_ENGINE == "lbph":
+            return
+        sface_path, yunet_path = self._model_path(SFACE_MODEL_FILE), self._model_path(YUNET_MODEL_FILE)
+        if not (sface_path.exists() and yunet_path.exists()):
+            logger.warning("SFace/YuNet models missing (%s, %s): face recognition falls back to LBPH. "
+                           "Run deploy/windows/Setup.cmd (scripts/download_models.py) to install them.",
+                           sface_path.name, yunet_path.name)
+            return
+        try:
+            self._sface = cv2.FaceRecognizerSF.create(str(sface_path), "")
+            self._yunet = cv2.FaceDetectorYN.create(str(yunet_path), "", (320, 320), 0.6, 0.3, 5)
+            logger.info("Face recognition engine: SFace (accept >= %.2f, reject < %.2f)", SFACE_ACCEPT, SFACE_REJECT)
+        except Exception as e:
+            self._sface = self._yunet = None
+            logger.warning("SFace unavailable (%s); falling back to LBPH", e)
+
+    @property
+    def engine(self) -> str:
+        return "sface" if self._sface is not None else "lbph"
+
+    def _embed(self, image: np.ndarray, box: Optional[Any] = None) -> Optional[Tuple[np.ndarray, bool]]:
+        """(unit-length SFace embedding, aligned) of the face in `box`, or of a face crop when box is None.
+
+        aligned=False means YuNet found no landmarks (hand over the face, strong profile) and a plain
+        112x112 crop was used: such a frame may keep a tracked identity but never establishes one.
+        """
+        if self._sface is None or image is None or image.size == 0:
+            return None
+        if len(image.shape) == 2:
+            image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        h, w = image.shape[:2]
+        if box is not None:
+            bx, by, bw, bh = [int(v) for v in box[:4]]
+            m = int(max(bw, bh) * 0.6)
+            crop = image[max(0, by - m):min(h, by + bh + m), max(0, bx - m):min(w, bx + bw + m)]
+            tight = image[max(0, by):min(h, by + bh), max(0, bx):min(w, bx + bw)]
+        else:
+            m = int(max(h, w) * 0.3)
+            crop = cv2.copyMakeBorder(image, m, m, m, m, cv2.BORDER_REPLICATE)
+            tight = image
+        if crop.size == 0 or tight.size == 0:
+            return None
+        scale = min(1.0, 640.0 / max(crop.shape[:2]))  # YuNet is fast on small inputs
+        small = crop if scale == 1.0 else cv2.resize(crop, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+        try:
+            with self._model_lock:
+                self._yunet.setInputSize((small.shape[1], small.shape[0]))
+                _, faces = self._yunet.detect(small)
+                if faces is not None and len(faces):
+                    f = max(faces, key=lambda r: r[2] * r[3]).copy()
+                    f[:14] /= scale
+                    face_img, aligned = self._sface.alignCrop(crop, f), True
+                else:
+                    face_img, aligned = cv2.resize(tight, (112, 112), interpolation=cv2.INTER_AREA), False
+                feat = self._sface.feature(face_img).flatten().astype(np.float32)
+        except Exception as e:
+            logger.debug("SFace embedding failed: %s", e)
+            return None
+        n = float(np.linalg.norm(feat))
+        return (feat / n, aligned) if n > 0 else None
+
+    def _sface_best(self, vec: np.ndarray) -> Tuple[Optional[str], float]:
+        """Best registered patient and its cosine similarity (mean of the 3 closest registered photos)."""
+        best_pid, best = None, -1.0
+        for pid, gal in self._gallery.items():
+            sims = gal @ vec
+            k = min(3, len(sims))
+            score = float(np.mean(np.sort(sims)[-k:]))
+            if score > best:
+                best_pid, best = pid, score
+        return best_pid, best
 
     def _load_detector(self) -> None:
         """Load OpenCV DNN face detector with Haar Cascade fallback."""
@@ -265,6 +383,7 @@ class FaceAdapter:
         """
         with self._model_lock:
             if not self.registered_faces_dir.exists():
+                self._gallery = {}
                 self._is_trained = False
                 self._recognizer = None
                 self._label_to_id = {}
@@ -276,6 +395,7 @@ class FaceAdapter:
             label_to_id: Dict[int, str] = {}
             id_to_label: Dict[str, int] = {}
             current_label = 1
+            gallery: Dict[str, np.ndarray] = {}
 
             patient_dirs = [p for p in self.registered_faces_dir.iterdir() if p.is_dir()]
 
@@ -289,10 +409,14 @@ class FaceAdapter:
                 id_to_label[pid] = current_label
 
                 patient_samples = []
+                embeddings = []
                 for img_path in img_files:
                     img = cv2.imread(str(img_path))
                     if img is None:
                         continue
+                    emb = self._embed(img)
+                    if emb is not None and emb[1]:
+                        embeddings.append(emb[0])
 
                     # Canonical extraction WITHOUT double-cropping
                     roi = self.extract_face_roi(img)
@@ -319,7 +443,16 @@ class FaceAdapter:
                         faces.append(rot)
                         labels.append(current_label)
 
+                if embeddings:
+                    gallery[pid] = np.stack(embeddings)
                 current_label += 1
+
+            self._gallery = gallery
+            if self._sface is not None:
+                logger.info("SFace gallery: %s", {k: len(v) for k, v in gallery.items()})
+                missing = [p for p in label_to_id.values() if p not in gallery]
+                if missing:
+                    logger.warning("No usable face photo for SFace in registered_faces/%s; re-register these users", missing)
 
             if len(faces) >= 2 and len(label_to_id) >= 1:
                 try:
@@ -339,13 +472,13 @@ class FaceAdapter:
                     return True
                 except Exception as e:
                     logger.error("Failed to train LBPH face recognizer: %s", e)
-                    self._is_trained = False
-                    return False
+                    self._is_trained = bool(self._gallery)
+                    return self._is_trained
             else:
-                self._is_trained = False
+                self._is_trained = bool(self._gallery)
                 self._recognizer = None
-                self._label_to_id = {}
-                self._id_to_label = {}
+                self._label_to_id = label_to_id
+                self._id_to_label = id_to_label
                 logger.info("Not enough face samples to train recognizer (found %d samples).", len(faces))
                 return False
 
@@ -365,140 +498,168 @@ class FaceAdapter:
         else:
             return {"status": "unknown", "patient_id": "unknown"}
 
+    # ------------------------------------------------------------------ per-frame match
+    def _frame_verdict(self, frame: np.ndarray, box, now: float) -> Tuple[str, Optional[str], float, float]:
+        """One frame on its own: ("match" | "reject" | "unsure", patient id, similarity 0..1, LBPH-like distance)."""
+        if self._sface is not None and self._gallery:
+            # While a tracked identity was confirmed less than a second ago, embed ~4x/s instead of every frame.
+            if (self._track_pid and now - self._track_last_match < 1.0 and now - self._last_embed_ts < 0.25
+                    and self._box_continuous(box)):
+                return "unsure", self._track_pid, self._track_best_score, 0.0
+            self._last_embed_ts = now
+            emb = self._embed(frame, box)
+            if emb is None:
+                return "unsure", None, 0.0, 999.0
+            vec, aligned = emb
+            pid, sim = self._sface_best(vec)
+            dist = round(max(0.0, 1.0 - sim) * 100.0, 1)  # kept for logs / old consumers
+            if sim >= SFACE_ACCEPT and aligned:
+                return "match", pid, sim, dist
+            if sim < SFACE_REJECT and aligned:
+                return "reject", pid, sim, dist
+            return "unsure", pid, sim, dist
+
+        roi = self.extract_face_roi(frame, box=box)
+        if roi is None or self._recognizer is None:
+            return "unsure", None, 0.0, 999.0
+        int_label, distance = self._recognizer.predict(roi)
+        pid = self._label_to_id.get(int_label)
+        sim = max(0.0, min(1.0, 1.0 - distance / 100.0))
+        if pid is not None and distance < RECOGNITION_THRESHOLD:
+            return "match", pid, sim, float(distance)
+        if distance > LBPH_REJECT:
+            return "reject", pid, sim, float(distance)
+        return "unsure", pid, sim, float(distance)
+
+    def _box_continuous(self, box) -> bool:
+        """The face box is where the tracked face was (the same person, not someone else in the frame)."""
+        if self._track_box is None or box is None:
+            return False
+        px, py, pw, ph = self._track_box
+        bx, by, bw, bh = box[:4]
+        dx = (bx + bw / 2.0) - (px + pw / 2.0)
+        dy = (by + bh / 2.0) - (py + ph / 2.0)
+        return dx * dx + dy * dy <= (pw * pw + ph * ph) * 1.0 and 0.5 <= (bw * bh) / max(1.0, pw * ph) <= 2.0
+
+    def _confidence(self, score: float) -> float:
+        if self._sface is not None:
+            return float(min(0.99, max(0.60, 0.60 + 0.39 * (score - SFACE_ACCEPT) / max(1e-6, 0.85 - SFACE_ACCEPT))))
+        return float(min(0.99, max(0.60, score)))
+
+    def _result(self, status: str, pid: Optional[str], box, score: float, distance: float) -> Dict[str, Any]:
+        bx, by, bw, bh = box[:4]
+        if status in ("recognized", "uncertain") and pid:
+            profile = self.get_patient_profile(pid) or {}
+            name = profile.get("name", f"Bệnh nhân {pid}")
+            caregiver = profile.get("caregiver") or {}
+            caregiver_email = caregiver.get("email") if isinstance(caregiver, dict) else ""
+            if status == "uncertain":
+                name = f"{name} (Đang xác minh)"
+            return {
+                "status": status, "user_id": pid, "patient_id": pid, "name": name,
+                "confidence": self._confidence(score) if status == "recognized" else 0.55,
+                "similarity": round(float(score), 3), "distance": float(distance), "box": (bx, by, bw, bh),
+                "profile": profile, "caregiver_email": caregiver_email, "engine": self.engine,
+            }
+        if status == "uncertain":
+            return {"status": "uncertain", "user_id": None, "patient_id": None, "name": "Đang xác minh",
+                    "confidence": 0.0, "similarity": round(float(score), 3), "distance": float(distance),
+                    "box": (bx, by, bw, bh), "profile": None, "caregiver_email": "", "engine": self.engine}
+        return {"status": "unknown", "user_id": "unknown", "patient_id": "unknown", "name": "Người lạ (Chưa đăng ký)",
+                "confidence": 0.0, "similarity": round(float(score), 3), "distance": float(distance),
+                "box": (bx, by, bw, bh), "profile": None, "caregiver_email": "", "engine": self.engine}
+
     def recognize_face(self, frame: np.ndarray) -> Dict[str, Any]:
         """
-        Genuine Face Recognition pipeline:
-        1. Detect primary face ROI.
-        2. Extract canonical normalized face ROI (CLAHE + bilateral + 200x200).
-        3. Predict identity using trained LBPH model.
-        4. Match against registered patients in patients.json.
+        Detect the main face, score it against the registered patients (SFace, LBPH fallback) and decide
+        with tracking + hysteresis (see the module header):
+          recognized  this frame matched, or the tracked patient's face is still in the same place and
+                      nothing clearly contradicts it (hand over the mouth, head turned, blur)
+          unknown     several clearly-different frames for >= 1.5 s, or a new face that never matched
+          uncertain   a new face whose first frames are inconclusive
         """
+        now = time.time()
         detected = self.detect_face(frame)
         if detected is None:
             self._frames_without_face += 1
+            if self._track_pid and now - self._last_face_seen > self._identity_ttl:
+                self._track_pid, self._track_box = None, None
             if self._frames_without_face >= 5:
                 self._pred_history.clear()
-                self._consecutive_unknown_count = 0
-                self._last_stable_pid = None
-            return {
-                "status": "no_face",
-                "patient_id": None,
-                "name": None,
-                "confidence": 0.0,
-                "distance": 999.0,
-                "box": None,
-                "profile": None,
-            }
+                self._reject_count, self._reject_since = 0, None
+            return {"status": "no_face", "patient_id": None, "name": None, "confidence": 0.0,
+                    "distance": 999.0, "box": None, "profile": None}
 
         self._frames_without_face = 0
-        bx, by, bw, bh, det_conf = detected
-        roi = self.extract_face_roi(frame, box=detected)
-        if roi is None:
-            return {
-                "status": "no_face",
-                "patient_id": None,
-                "name": None,
-                "confidence": 0.0,
-                "distance": 999.0,
-                "box": detected,
-                "profile": None,
-            }
-
+        self._last_face_seen = now
+        box = tuple(int(v) for v in detected[:4])
         with self._model_lock:
-            if self._is_trained and self._recognizer is not None:
-                try:
-                    int_label, distance = self._recognizer.predict(roi)
+            if not self._is_trained:
+                return {"status": "unknown", "patient_id": "unknown", "name": "Chưa có dữ liệu đăng ký",
+                        "confidence": 0.0, "distance": 999.0, "box": box, "profile": None}
+            try:
+                verdict, pid, score, distance = self._frame_verdict(frame, box, now)
+            except Exception as e:
+                logger.error("Recognition error: %s", e)
+                verdict, pid, score, distance = "unsure", None, 0.0, 999.0
 
-                    # Raw single-frame match evaluation
-                    is_raw_match = (distance < RECOGNITION_THRESHOLD and int_label in self._label_to_id)
-                    raw_pid = self._label_to_id[int_label] if (int_label in self._label_to_id) else "unknown"
+        continuous = self._box_continuous(box)
+        if self._track_pid and not continuous and verdict != "match":
+            # The face moved somewhere else in the picture: it has to be matched again.
+            self._track_pid = None
+        self._track_box = box
+        self._pred_history.append({"status": verdict, "pid": pid, "distance": float(distance)})
 
-                    now = time.time()
-                    if is_raw_match:
-                        self._consecutive_unknown_count = 0
-                        self._last_recognized_time = now
-                        self._last_stable_pid = raw_pid
-                        self._pred_history.append({"status": "recognized", "pid": raw_pid, "distance": float(distance)})
-                    else:
-                        self._consecutive_unknown_count += 1
-                        self._pred_history.append({"status": "unknown", "pid": "unknown", "distance": float(distance)})
+        if verdict == "match":
+            if self._track_pid != pid:
+                self._track_best_score = score
+            self._track_pid, self._track_last_match = pid, now
+            self._track_best_score = max(score, 0.7 * self._track_best_score + 0.3 * score)
+            self._reject_count, self._reject_since = 0, None
+            self._last_stable_pid, self._last_recognized_time = pid, now
+            return self._result("recognized", pid, box, score, distance)
 
-                    # Temporal consensus across sliding window
-                    recognized_matches = [p for p in self._pred_history if p["status"] == "recognized"]
-                    time_since_rec = (now - self._last_recognized_time) if self._last_recognized_time > 0 else 999.0
+        if verdict == "reject":
+            if self._reject_since is not None and now - self._last_reject_ts > 3.0:
+                self._reject_count, self._reject_since = 0, None  # old, isolated rejects do not add up
+            self._reject_count += 1
+            self._reject_since = self._reject_since or now
+            self._last_reject_ts = now
+        stranger = (self._reject_count >= STRANGER_MIN_FRAMES and self._reject_since is not None
+                    and now - self._reject_since >= STRANGER_MIN_SECONDS)
 
-                    # 1. Reliable Recognition (raw match or smoothed match within consensus tolerance)
-                    if is_raw_match or (recognized_matches and self._consecutive_unknown_count < 6 and time_since_rec <= self._identity_ttl):
-                        best_match = recognized_matches[-1] if recognized_matches else {"pid": raw_pid}
-                        pid = best_match["pid"]
-                        smooth_dist = float(np.mean([p["distance"] for p in recognized_matches])) if recognized_matches else float(distance)
+        if self._track_pid and now - self._track_last_match <= self._identity_ttl and not stranger:
+            return self._result("recognized", self._track_pid, box, self._track_best_score, distance)
+        if stranger:
+            if self._track_pid:
+                logger.info("Face no longer matches %s: treated as a different person", self._track_pid)
+            self._track_pid = None
+            self._last_stable_pid = None
+            self._stranger_confirmed_at = now
+            return self._result("unknown", None, box, score, distance)
+        if self._track_pid:  # tracked but the hold expired without a fresh match: re-verify
+            return self._result("uncertain", self._track_pid, box, score, distance)
+        return self._result("uncertain", None, box, score, distance)
 
-                        profile = self.get_patient_profile(pid) or {}
-                        name = profile.get("name", f"Bệnh nhân {pid}")
+    def reset_tracking(self) -> None:
+        """Forget the tracked face (tests, camera source change)."""
+        self._pred_history.clear()
+        self._track_pid, self._track_box, self._track_last_match, self._track_best_score = None, None, 0.0, 0.0
+        self._reject_count, self._reject_since, self._last_reject_ts = 0, None, 0.0
+        self._consecutive_unknown_count = 0
+        self._last_stable_pid, self._last_recognized_time = None, 0.0
+        self._last_embed_ts = 0.0
 
-                        # Calibrated smoothed confidence
-                        conf_pct = min(0.99, max(0.65, 0.70 + 0.28 * (1.0 - (min(smooth_dist, RECOGNITION_THRESHOLD) / RECOGNITION_THRESHOLD))))
-                        caregiver = profile.get("caregiver") or {}
-                        caregiver_email = caregiver.get("email") if isinstance(caregiver, dict) else ""
-                        self._last_stable_pid = pid
-
-                        return {
-                            "status": "recognized",
-                            "user_id": pid,
-                            "patient_id": pid,
-                            "name": name,
-                            "confidence": float(conf_pct),
-                            "distance": float(smooth_dist),
-                            "box": (bx, by, bw, bh),
-                            "profile": profile,
-                            "caregiver_email": caregiver_email,
-                        }
-
-                    # 2. Intermediate Uncertain State: User briefly turned head or bowed down
-                    elif self._last_stable_pid and time_since_rec <= self._identity_ttl and self._consecutive_unknown_count < 15:
-                        pid = self._last_stable_pid
-                        profile = self.get_patient_profile(pid) or {}
-                        name = profile.get("name", f"Bệnh nhân {pid}")
-                        caregiver = profile.get("caregiver") or {}
-                        caregiver_email = caregiver.get("email") if isinstance(caregiver, dict) else ""
-                        return {
-                            "status": "uncertain",
-                            "user_id": pid,
-                            "patient_id": pid,
-                            "name": f"{name} (Đang xác minh)",
-                            "confidence": 0.55,
-                            "distance": float(distance),
-                            "box": (bx, by, bw, bh),
-                            "profile": profile,
-                            "caregiver_email": caregiver_email,
-                        }
-
-                    # 3. Persistent Stranger
-                    else:
-                        self._last_stable_pid = None
-                        return {
-                            "status": "unknown",
-                            "user_id": "unknown",
-                            "patient_id": "unknown",
-                            "name": "Người lạ (Chưa đăng ký)",
-                            "confidence": 0.0,
-                            "distance": float(distance),
-                            "box": (bx, by, bw, bh),
-                            "profile": None,
-                            "caregiver_email": "",
-                        }
-                except Exception as e:
-                    logger.error("Recognition error: %s", e)
-
-        return {
-            "status": "unknown",
-            "patient_id": "unknown",
-            "name": "Chưa có dữ liệu đăng ký",
-            "confidence": 0.0,
-            "distance": 999.0,
-            "box": (bx, by, bw, bh),
-            "profile": None,
-        }
+    def present_patient(self, max_age: float = 30.0) -> Optional[str]:
+        """Registered patient seen within `max_age` s with no stranger since (the face may be hidden right now,
+        e.g. a hand in front of the mouth while taking a pill). Used by the AI core (medication intake)."""
+        now = time.time()
+        pid = self._last_stable_pid
+        if not pid or not self._last_recognized_time:
+            return None
+        if now - self._last_recognized_time > max_age or self._stranger_confirmed_at > self._last_recognized_time:
+            return None
+        return pid
 
     def draw_tracking_overlay(
         self,
@@ -558,7 +719,7 @@ class FaceAdapter:
 
                 # Compact, bounded tag (full details in outer UI cards)
                 display_name = name[:16] + ".." if len(name) > 16 else name
-                tag_text = f"✓ {display_name}"
+                tag_text = display_name
                 font_sz = 13
                 tw, th = get_text_size(tag_text, font_size=font_sz)
                 tag_w = tw + 12
@@ -595,7 +756,7 @@ class FaceAdapter:
                 cv2.line(frame, (bx + bw, by + bh), (bx + bw - clen, by + bh), corner_color, 3)
                 cv2.line(frame, (bx + bw, by + bh), (bx + bw, by + bh - clen), corner_color, 3)
 
-                tag_text = "🟡 Xác minh..."
+                tag_text = "Đang xác minh..."
                 font_sz = 12
                 tw, th = get_text_size(tag_text, font_size=font_sz)
                 tag_w = tw + 12
@@ -628,7 +789,7 @@ class FaceAdapter:
                 cv2.line(frame, (bx + bw, by + bh), (bx + bw - clen, by + bh), corner_color, 3)
                 cv2.line(frame, (bx + bw, by + bh), (bx + bw, by + bh - clen), corner_color, 3)
 
-                tag_text = "🟠 Người lạ"
+                tag_text = "Người lạ"
                 font_sz = 12
                 tw, th = get_text_size(tag_text, font_size=font_sz)
                 tag_w = tw + 12
