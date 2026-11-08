@@ -70,3 +70,18 @@ def test_label_fall_event(db):
     assert db.fetchone("SELECT label, label_by FROM ai_fall_events")["label"] == "false_alarm"
     assert call(db, "POST", ["fall", "fe1", "label"], body={"label": "bad"})[0] == 400
     assert call(db, "POST", ["fall", "nope", "label"], body={"label": "unsure"})[0] == 404
+
+
+def test_overview_doses_show_today_not_next_week(db):
+    """Field 08/11: a week of future doses filled the 20-row list and hid the dose being watched now."""
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime.now(UTC).replace(microsecond=0, tzinfo=None)
+    for i, at in enumerate([now - timedelta(minutes=5)] + [now + timedelta(hours=h) for h in range(13, 13 + 24 * 7, 6)]):
+        db.execute(
+            "INSERT INTO dose_occurrences (occurrence_id, schedule_id, revision, scheduled_at_utc, local_scheduled_time, "
+            "grace_deadline_utc, state, medication_name_snapshot, dose_snapshot, instructions_snapshot, patient_id) "
+            "VALUES (?,?,?,?,?,?, 'PENDING', 'Amlor', '1 viên', 'Sau ăn', ?)",
+            (f"occ_{i}", "sch_1", 1, at.isoformat(), at.isoformat(), (at + timedelta(hours=1)).isoformat(), PID))
+    doses = call(db, "GET", [])[1]["medication"]["doses"]
+    assert [d["occurrence_id"] for d in doses] == ["occ_0"]

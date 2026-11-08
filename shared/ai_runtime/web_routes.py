@@ -108,8 +108,11 @@ def overview(store: AICoreStore, patient_id: str) -> dict:
     doses = db.fetchall(
         "SELECT d.occurrence_id, d.medication_name_snapshot AS medication, d.scheduled_at_utc, d.state, d.action_actor, "
         "m.actions_done FROM dose_occurrences d LEFT JOIN ai_medication_monitor m ON m.occurrence_id=d.occurrence_id "
-        "WHERE d.patient_id=? AND d.scheduled_at_utc>=? AND d.state!='CANCELLED' ORDER BY d.scheduled_at_utc DESC LIMIT 20",
-        (patient_id, since))
+        "WHERE d.patient_id=? AND d.scheduled_at_utc>=? AND d.scheduled_at_utc<=? AND d.state!='CANCELLED' "
+        "ORDER BY d.scheduled_at_utc DESC LIMIT 20",
+        # Upper bound: without it the next 7 days of a prescription filled the 20 rows and today's doses
+        # (the ones being watched) dropped out of the list.
+        (patient_id, since, (datetime.now(UTC) + timedelta(hours=12)).isoformat()))
     return {
         "patient_id": patient_id,
         "posture": {"current": posture, "last_24h_seconds": {r["posture"]: round(r["seconds"] or 0) for r in segments},
