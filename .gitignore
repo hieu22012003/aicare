@@ -50,6 +50,7 @@ backups/
 !models/object_detector/*.onnx
 !features/face_monitoring/standalone/models/face_recognition_sface_2021dec.onnx
 !features/face_monitoring/standalone/models/face_detection_yunet_2023mar.onnx
+!data/models/vits-piper-vi_VN-vais1000-medium/vi_VN-vais1000-medium.onnx
 *.tflite
 *.task
 *.caffemodel
