@@ -38,6 +38,11 @@ logger = logging.getLogger("ApiRouter")
 UTC = timezone.utc
 
 
+
+def _vn_now() -> datetime:
+    """Current wall-clock time in Vietnam (UTC+7), naive. The server may run in UTC (Render)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=7)
+
 class ApiRouter:
     def __init__(
         self,
@@ -1482,6 +1487,10 @@ class ApiRouter:
             if end_day is not None and end_day < start_day:
                 return 400, {"error": "Ngày kết thúc không được trước ngày bắt đầu dùng thuốc"}
             effective_from = body.get("effective_from") or (f"{start_date_str}T00:00:00+00:00" if len(start_date_str) == 10 else now_iso)
+            if not body.get("effective_from") and effective_from < now_iso:
+                # Starting today: the schedule starts now, so the rolling scheduler does not recreate this
+                # morning's doses as missed either.
+                effective_from = now_iso
             rx_id = f"rx_{uuid.uuid4().hex[:8]}"
             rx_code = body.get("prescription_code") or f"DON-{uuid.uuid4().hex[:6].upper()}"
 
@@ -1611,8 +1620,11 @@ class ApiRouter:
                         (sched_id, pi_id, json.dumps(times), effective_from),
                     )
 
-                    # Generate occurrences covering today and next 7 days
-                    today_obj = date.today()
+                    # Generate occurrences covering today and next 7 days. Times of today that are already past
+                    # are skipped: a prescription written at 21:00 must not create this morning's 08:00 dose as
+                    # "missed" (field 09/11: three "Quá giờ, chưa uống" rows at 08:00 and false alerts).
+                    now_local = _vn_now()
+                    today_obj = now_local.date()
                     try:
                         s_date = date.fromisoformat(start_date_str[:10])
                     except Exception:
@@ -1631,6 +1643,8 @@ class ApiRouter:
                             try:
                                 hh, mm = map(int, t_str.split(":"))
                                 local_dt = datetime.combine(curr_d, time(hh, mm))
+                                if local_dt < now_local - timedelta(minutes=1):
+                                    continue
                                 utc_dt = local_dt - timedelta(hours=7)  # UTC+7
                                 occ_id = f"occ_{uuid.uuid4().hex[:16]}"
                                 conn.execute(
@@ -1829,11 +1843,14 @@ class ApiRouter:
                     # Generate occurrences for today (if not already taken) and next 3 days
                     med = conn.fetchone("SELECT brand_name FROM medications WHERE medication_id = ?", (med_id,))
                     brand = med["brand_name"] if med else "Thuốc"
+                    now_local = _vn_now()
                     for day_offset in range(0, 4):
-                        d_obj = date.today() + timedelta(days=day_offset)
+                        d_obj = now_local.date() + timedelta(days=day_offset)
                         for t_str in times:
                             hh, mm = map(int, t_str.split(":"))
                             local_dt = datetime.combine(d_obj, time(hh, mm))
+                            if local_dt < now_local - timedelta(minutes=1):
+                                continue  # past times stay with the previous version (history), never re-created
                             utc_dt = local_dt - timedelta(hours=7)  # UTC+7
                             # If today, check if this dose was already confirmed under the old prescription
                             prior_confirmed = None

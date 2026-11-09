@@ -23,7 +23,11 @@ __pycache__/
 *.zip.sha256
 
 # User data and generated state
-/data/
+/data/*
+!/data/models/
+/data/models/*
+# Bundled Vietnamese voice (Piper vi_VN-vais1000-medium, CC BY 4.0): speech must work without a download
+!/data/models/vits-piper-vi_VN-vais1000-medium/
 /shared/state.json
 /shared/data/
 /shared/results/

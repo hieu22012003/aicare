@@ -147,9 +147,12 @@ def test_default_right_hand_two_fingers_and_open_mouth_is_taken():
     assert out[0].hand == "right" and out[0].steps["drink_evidence"] == "gesture"
 
 
-def test_default_ignores_left_hand_closed_mouth_and_single_finger():
+def test_default_ignores_closed_mouth_and_single_finger():
+    # Either hand counts by default since 09/11 (elders use either hand; MediaPipe left/right depends on mirroring).
     det = IntakeDetector()
     fs, t = take_pill(0.0, which="left")
+    assert run(det, fs + frames(t, 70)[0]) != []
+    det = IntakeDetector(IntakeConfig(hand=Hand.RIGHT))
     assert run(det, fs + frames(t, 70)[0]) == []
     det = IntakeDetector()
     fs, t = take_pill(0.0, open_mouth=False)

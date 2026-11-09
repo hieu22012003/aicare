@@ -29,7 +29,8 @@ class IntakeVerdict(str, Enum):
 class IntakeConfig(BaseModel):
     """Starting thresholds. Tune with labelled sessions before turning trial mode off."""
 
-    hand: Hand = Field(Hand.RIGHT, description="which hand brings the pill to the mouth")
+    # ANY: elders use either hand, and MediaPipe's left/right labels depend on whether the frame is mirrored.
+    hand: Hand = Field(Hand.ANY, description="which hand brings the pill to the mouth")
     fingers: Fingers = Field(Fingers.THUMB_INDEX, description="thumb + index both at the mouth, or any fingertip")
     gesture_counts_as_taken: bool = Field(
         True, description="two fingers at the mouth + mouth open = taken (VERIFIED) without waiting for a drink")

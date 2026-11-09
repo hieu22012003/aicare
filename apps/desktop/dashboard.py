@@ -695,7 +695,7 @@ class DashboardWindow(QMainWindow):
             annotated_frame = self.router.emotion_adapter.draw_emotion_badge(
                 annotated_frame, emo_res["emotion_vi"], emo_res["confidence"]
             )
-            return annotated_frame
+            return self._draw_medication_banner(annotated_frame)
         else:
             # 1. Real-time Emotion Recognition on clean frame
             emo_res = self.router.emotion_adapter.process_frame(frame)
@@ -708,7 +708,23 @@ class DashboardWindow(QMainWindow):
             annotated_frame = self.router.emotion_adapter.draw_emotion_badge(
                 annotated_frame, emo_res["emotion_vi"], emo_res["confidence"]
             )
-            return annotated_frame
+            return self._draw_medication_banner(annotated_frame)
+
+    def _draw_medication_banner(self, frame: np.ndarray) -> np.ndarray:
+        """While a medication window is open the video says so (and what the camera sees) on top."""
+        try:
+            from shared.ai_runtime.app_hooks import get_runtime
+            from shared.ai_runtime.med_banner import banner_lines, draw_banner
+
+            runtime = get_runtime()
+            if runtime is None or not hasattr(runtime, "medication_view"):
+                return frame
+            pid = getattr(self, "_active_resolved_pid", None) or getattr(self.today_todo_widget, "patient_id", None)
+            active, policy, live = runtime.medication_view(pid)
+            return draw_banner(frame, banner_lines(self.unified_db, pid, active, policy, live))
+        except Exception:
+            logger.debug("medication banner failed", exc_info=True)
+            return frame
 
     def _record_camera_emotion(self, frame: np.ndarray, result: Dict[str, Any], hardware_camera: bool) -> None:
         """Sample fresh camera results, never a stale JSON result or a test video."""

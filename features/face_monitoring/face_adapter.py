@@ -180,7 +180,9 @@ class FaceAdapter:
                 if faces is not None and len(faces):
                     f = max(faces, key=lambda r: r[2] * r[3]).copy()
                     f[:14] /= scale
-                    face_img, aligned = self._sface.alignCrop(crop, f), True
+                    # A strongly turned head (field 09/11: looking sideways gave "Người lạ") embeds far from the
+                    # registered frontal photos: such a frame may keep the identity but never rejects it.
+                    face_img, aligned = self._sface.alignCrop(crop, f), self._frontal_enough(f)
                 else:
                     face_img, aligned = cv2.resize(tight, (112, 112), interpolation=cv2.INTER_AREA), False
                 feat = self._sface.feature(face_img).flatten().astype(np.float32)
@@ -189,6 +191,16 @@ class FaceAdapter:
             return None
         n = float(np.linalg.norm(feat))
         return (feat / n, aligned) if n > 0 else None
+
+    @staticmethod
+    def _frontal_enough(f) -> bool:
+        """YuNet row: x, y, w, h, right eye, left eye, nose, right mouth, left mouth, score."""
+        rex, rey, lex, ley, nx = f[4], f[5], f[6], f[7], f[8]
+        eye_dist = float(np.hypot(lex - rex, ley - rey))
+        if eye_dist < 0.25 * float(f[2]):  # eyes nearly on top of each other: profile
+            return False
+        offset = (nx - (rex + lex) / 2.0) / eye_dist  # 0 frontal, about +-0.5 at 45 degrees
+        return abs(offset) <= 0.38
 
     def _sface_best(self, vec: np.ndarray) -> Tuple[Optional[str], float]:
         """Best registered patient and its cosine similarity (mean of the 3 closest registered photos)."""

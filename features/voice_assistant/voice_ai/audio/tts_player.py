@@ -15,9 +15,11 @@ import os
 import subprocess
 import sys
 import threading
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger("voice_ai.audio.tts")
+_REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 class TTSPlaybackCoordinator:
@@ -84,24 +86,9 @@ class TTSPlaybackCoordinator:
         # Stop any existing speech before starting new speech
         self.stop()
 
-        cmd = [
-            sys.executable,
-            "-c",
-            "import sys, pyttsx3\n"
-            "try:\n"
-            "    engine = pyttsx3.init()\n"
-            "    for v in engine.getProperty('voices'):\n"
-            "        if 'vi' in getattr(v, 'languages', []) or 'vi' in v.id.lower():\n"
-            "            engine.setProperty('voice', v.id)\n"
-            "            break\n"
-            "    engine.setProperty('rate', 135)\n"
-            "    engine.setProperty('volume', 1.0)\n"
-            "    engine.say(sys.argv[1])\n"
-            "    engine.runAndWait()\n"
-            "except Exception:\n"
-            "    pass\n",
-            clean_text,
-        ]
+        # Bundled Vietnamese voice first, then a real Vietnamese Windows voice (see vi_tts.py: the old inline
+        # pyttsx3 picker chose "Microsoft David" because its id contains "vi", so reminders were unintelligible).
+        cmd = [sys.executable, "-m", "features.voice_assistant.voice_ai.audio.vi_tts", clean_text]
 
         if getattr(sys, 'frozen', False):
             cmd = [sys.executable, '--local-tts', clean_text]
@@ -112,8 +99,10 @@ class TTSPlaybackCoordinator:
             try:
                 self._current_process = subprocess.Popen(
                     cmd,
+                    cwd=str(_REPO_ROOT),
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 )
                 logger.debug("Started TTS playback for: %s", clean_text[:40])
             except Exception as e:

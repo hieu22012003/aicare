@@ -30,8 +30,9 @@ SPEECH = (DoseAction.SPEAK_DUE, DoseAction.OVERDUE)
 
 class MonitorPolicy(BaseModel):
     open_before_minutes: float = Field(5, ge=0, le=60)
-    overdue_minutes: float = Field(10, ge=1, le=240)
-    escalate_minutes: float = Field(30, ge=1, le=600)
+    # Field 09/11: the family expects the reminder + web warning ~5 minutes after the dose time, not 10.
+    overdue_minutes: float = Field(5, ge=1, le=240)
+    escalate_minutes: float = Field(20, ge=1, le=600)
     close_minutes: float = Field(60, ge=1, le=1440)
 
     @model_validator(mode="after")

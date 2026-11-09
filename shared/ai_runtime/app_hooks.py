@@ -38,6 +38,12 @@ def _make_camera_waker(window):
             try:
                 cam.resume()
                 cam.start_camera()
+                # Show the camera page so the elder sees the "đang giám sát uống thuốc" banner (field 09/11).
+                tabs = getattr(window, "medication_tabs", None)
+                if tabs is not None and tabs.currentIndex() != 1:
+                    tabs.setCurrentIndex(1)
+                if cam.get_mode() not in ("monitor", "rehabilitation", "registration"):
+                    cam.set_mode("monitor")
                 bar = window.statusBar() if hasattr(window, "statusBar") else None
                 if bar is not None:
                     bar.showMessage("💊 Đến giờ uống thuốc: camera đã bật để giám sát uống thuốc", 15000)

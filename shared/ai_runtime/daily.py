@@ -17,6 +17,28 @@ from zoneinfo import ZoneInfo
 UTC = timezone.utc
 
 
+
+def _live_emotion(db, patient_id: str, now: datetime) -> dict | None:
+    """Expression mix of the 2-hour window in progress, if the camera saw the patient in the last 3 minutes."""
+    row = _row(db, "SELECT state_json FROM emotion_monitor_state_v2 WHERE patient_id=?", (patient_id,))
+    if not row:
+        return None
+    try:
+        import json
+
+        st = json.loads(row["state_json"])
+        seen = float(st.get("sample_at") or 0)
+        if now.timestamp() - seen > 180:
+            return None
+        d = st.get("durations") or {}
+        total = sum(float(v) for v in d.values())
+        label = max(("Neutral", "Happy", "Sad"), key=lambda k: float(d.get(k, 0))) if total >= 60 else st.get("label")
+        if label not in EMOTION_VI:
+            return None
+        return {"label": label, "dominant_label": label, "published_at": datetime.fromtimestamp(seen, UTC).isoformat()}
+    except Exception:
+        return None
+
 def _dt(iso: str) -> datetime:
     """Parse a stored timestamp; dose times are written without an offset and are UTC."""
     at = datetime.fromisoformat(iso)
@@ -76,18 +98,25 @@ def daily_summary(db, patient_id: str, day: str | None = None, now: datetime | N
                    (patient_id,))
     emotion = _row(db, "SELECT label, dominant_label, published_at FROM emotion_summaries_v2 WHERE patient_id=? "
                        "ORDER BY published_at DESC LIMIT 1", (patient_id,))
+    live = _live_emotion(db, patient_id, now)
+    if live and (not emotion or _dt(emotion["published_at"]) < now - timedelta(hours=2)):
+        # Summaries are published per 2-hour window; meanwhile show what the camera sees now (field 09/11:
+        # the card said "Chưa có dữ liệu" while the home app was showing the emotion live).
+        emotion = live
     recent = _iso(now - timedelta(hours=2))
     open_alerts = alerts(db, patient_id, recent, _iso(now + timedelta(minutes=1)), tz)
     open_alerts = [a for a in open_alerts if a["status_key"] in ("open", "new")]
     p_key = (posture or {}).get("posture") or "UNOBSERVED"
     stale = not posture or not posture.get("observed")
     current = {
-        "posture": {"key": p_key, "label": POSTURE_VI.get(p_key, p_key),
+        "posture": {"key": p_key, "label": ("Cần camera thấy toàn thân" if live and stale else POSTURE_VI.get(p_key, p_key)),
                     "where": LOCATION_VI.get((posture or {}).get("location") or "", ""),
                     "since_utc": (posture or {}).get("since_utc"), "observed": not stale},
-        "activity": {"label": "Không quan sát được" if stale else (
+        "activity": {"label": ("Thấy mặt, chưa thấy toàn thân" if live and stale else "Không quan sát được") if stale else (
             "Đang hoạt động" if p_key in ("WALKING", "STANDING", "BENDING") else "Đang nghỉ")},
-        "emotion": {"key": (emotion or {}).get("label"), "label": EMOTION_VI.get((emotion or {}).get("label"), "Chưa có dữ liệu"),
+        "emotion": {"key": (emotion or {}).get("label"),
+                    "label": EMOTION_VI.get((emotion or {}).get("label"), "Chưa có dữ liệu")
+                    + (" (đang quan sát)" if emotion is live and live else ""),
                     "at_utc": (emotion or {}).get("published_at")},
         "alert": {"count": len(open_alerts), "label": f"{len(open_alerts)} cảnh báo cần xem" if open_alerts else "Bình thường",
                   "latest": open_alerts[0] if open_alerts else None},

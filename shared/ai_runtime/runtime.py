@@ -206,6 +206,16 @@ class AICoreRuntime:
 
     # ------------------------------------------------------------ voice / UI
 
+    def medication_view(self, pid: str | None):
+        """(window open, policy, live intake state) for the on-camera banner."""
+        if not pid:
+            return False, None, None
+        with self._lock:
+            s = self.brain.sessions.get(pid)
+            if not s or not self.brain.medication_active(pid):
+                return False, None, None
+            return True, s.med.policy, s.intake.live()
+
     def handle_transcript(self, patient_id: str, text: str) -> str | None:
         with self._lock:
             return self.brain.handle_transcript(patient_id, text)

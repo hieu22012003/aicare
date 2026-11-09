@@ -47,6 +47,7 @@ logger = logging.getLogger("EmotionAdapter")
 EMOTION_TAU_SECONDS = 1.5  # time constant of the probability smoothing
 EMOTION_SWITCH_MARGIN = 0.08  # another state must lead the shown one by this much ...
 EMOTION_SWITCH_SECONDS = 1.0  # ... for this long before the shown label changes
+EMOTION_MIN_CONFIDENCE = 0.42  # Vui vẻ / Buồn bã only above this smoothed probability
 
 # 3 Focused Emotion States
 EMOTION_CLASSES = ["Neutral", "Happy", "Sad"]
@@ -359,11 +360,14 @@ class EmotionAdapter:
 
     def _stable_label(self, probs: np.ndarray, now: float) -> int:
         best = int(np.argmax(probs))
+        if best != 0 and float(probs[best]) < EMOTION_MIN_CONFIDENCE:
+            best = 0  # weak evidence (field 09/11: "Buồn bã 32%" on a smiling face): say Bình thường
         cur = self._stable_idx
         if cur is None:
             self._stable_idx, self._challenger, self._challenger_since = best, None, 0.0
             return best
-        if best == cur or probs[best] - probs[cur] < EMOTION_SWITCH_MARGIN:
+        weak_current = cur != 0 and float(probs[cur]) < EMOTION_MIN_CONFIDENCE
+        if best == cur or (probs[best] - probs[cur] < EMOTION_SWITCH_MARGIN and not weak_current):
             self._challenger = None
             return cur
         if self._challenger != best:

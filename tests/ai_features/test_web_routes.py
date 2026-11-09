@@ -49,7 +49,7 @@ def test_overview_and_where(db):
 
 def test_settings_validate_and_need_edit_permission(db):
     code, data = call(db, "GET", ["settings", "medication"])
-    assert code == 200 and data["config"]["policy"]["overdue_minutes"] == 10
+    assert code == 200 and data["config"]["policy"]["overdue_minutes"] == 5
     cfg = data["config"]
     cfg["policy"]["overdue_minutes"] = 15
     cfg["intake"]["hand"] = "right"

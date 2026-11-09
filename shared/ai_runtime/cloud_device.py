@@ -381,6 +381,10 @@ class CloudDeviceRuntime:
 
     # ------------------------------------------------------------ voice
 
+    def medication_view(self, pid: str | None):
+        """(window open, policy, live state): the server owns the policy and the detection in this mode."""
+        return self.medication_active(pid), None, None
+
     def medication_active(self, pid: str | None = None) -> bool:
         return self.holistic_mode
 

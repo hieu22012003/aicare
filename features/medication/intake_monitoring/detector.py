@@ -91,6 +91,11 @@ class IntakeDetector:
         self._tilt_base: deque = deque(maxlen=60)
         self._last_ts = 0.0
 
+    def live(self) -> dict:
+        """What the detector sees right now (for the on-camera banner)."""
+        touching = self._contact_start is not None and self._contact_end is None
+        return {"hand_at_mouth": touching, "mouth_open": touching and self._open_at is not None}
+
     def _hands(self, f: HolisticFrame) -> list[tuple[str, tuple]]:
         out = []
         if f.right_hand and self.config.hand in (Hand.ANY, Hand.RIGHT):

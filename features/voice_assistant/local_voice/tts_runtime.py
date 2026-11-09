@@ -1,20 +1,12 @@
-"""Small TTS subprocess entry for frozen desktop releases."""
+"""Small TTS subprocess entry for frozen desktop releases (``AICare.exe --local-tts "text"``)."""
 import sys
 
 
 def speak(text):
     try:
-        import pyttsx3
-        engine = pyttsx3.init()
-        for voice in engine.getProperty('voices'):
-            if 'vi' in getattr(voice, 'languages', []) or 'vi' in voice.id.lower():
-                engine.setProperty('voice', voice.id)
-                break
-        engine.setProperty('rate', 135)
-        engine.setProperty('volume', 1.0)
-        engine.say(text)
-        engine.runAndWait()
-        return 0
+        from features.voice_assistant.voice_ai.audio.vi_tts import speak as vi_speak
+
+        return vi_speak(text)
     except Exception:
         return 1
 
