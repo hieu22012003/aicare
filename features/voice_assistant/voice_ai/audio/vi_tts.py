@@ -201,8 +201,50 @@ def speak_sapi(text: str) -> bool:
         return False
 
 
+CHIME_PREFIX = "\a"  # text starting with BEL: play the reminder chime first (medication due)
+
+
+def write_chime(path: str, rate: int = 22050) -> None:
+    """Soft three-note chime (~1.6 s), generated so no audio asset is needed."""
+    import numpy as np
+
+    notes = ((659.25, 0.0), (783.99, 0.38), (1046.5, 0.76))  # E5 G5 C6
+    total = int(rate * 1.6)
+    t = np.arange(total) / rate
+    out = np.zeros(total, dtype=np.float64)
+    for freq, start in notes:
+        env = np.where(t >= start, np.exp(-(t - start) * 3.2), 0.0)
+        out += env * (np.sin(2 * np.pi * freq * t) + 0.25 * np.sin(4 * np.pi * freq * t))
+    out = (out / np.max(np.abs(out)) * 0.7 * 32767).astype(np.int16)
+    with wave.open(path, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(out.tobytes())
+
+
+def play_chime() -> None:
+    fd, path = tempfile.mkstemp(suffix=".wav", prefix="aicare_chime_")
+    os.close(fd)
+    try:
+        write_chime(path)
+        play_wav(path)
+    except Exception as e:
+        log.warning("Chime failed: %s", e)
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
 def speak(text: str) -> int:
-    """Blocking. 0 = spoken, 1 = only a beep was possible."""
+    """Blocking. 0 = spoken, 1 = only a beep was possible. A leading BEL plays the chime first."""
+    if text.startswith(CHIME_PREFIX):
+        play_chime()
+        text = text.lstrip(CHIME_PREFIX).strip()
+        if not text:
+            return 0
     fd, path = tempfile.mkstemp(suffix=".wav", prefix="aicare_tts_")
     os.close(fd)
     try:
@@ -229,4 +271,7 @@ def speak(text: str) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(speak(sys.argv[1]) if len(sys.argv) == 2 else 2)
+    args = sys.argv[1:]
+    if args and args[0] == "--chime":
+        sys.exit(speak(CHIME_PREFIX + (args[1] if len(args) > 1 else "")))
+    sys.exit(speak(args[0]) if len(args) == 1 else 2)

@@ -151,7 +151,7 @@ class LocalVoiceWidget(QWidget):
         if controller:
             self.attach(controller, dispatcher)
         else:
-            self.update_state('off', 'Nhấn Nhận giọng nói để chuẩn bị. Khi sẵn sàng, nhấn để nói; Dừng để xử lý, Hủy để bỏ.')
+            self.update_state('off', 'Nhấn Nhận giọng nói rồi nói. Nói xong app tự dừng và chuyển thành chữ.')
 
     def _toggle_details(self):
         visible = not self.details_container.isVisible()
@@ -191,6 +191,8 @@ class LocalVoiceWidget(QWidget):
     def attach(self, controller, dispatcher):
         self.controller, self.dispatcher = controller, dispatcher
         controller.changed.connect(self.update_state)
+        if hasattr(controller, 'level'):
+            controller.level.connect(self._on_level)
         captured_signal = getattr(controller, 'transcript_captured', controller.transcript_ready)
         captured_signal.connect(self._on_transcript_ready)
         import os
@@ -207,6 +209,13 @@ class LocalVoiceWidget(QWidget):
         self.request_coordinator.resolved.connect(self.review)
         controller.transcript_ready.connect(self.request_coordinator.route)
         self.update_state(controller.state, 'Đang chuẩn bị nhận giọng nói...')
+
+    def _on_level(self, value):
+        """Live microphone meter so the elder sees the app hears them."""
+        if not self.controller or self.controller.state != 'recording':
+            return
+        bars = max(0, min(5, int(round(value * 5 + (0.4 if value > 0.03 else 0)))))
+        self.verification_badge.setText('🎙 ĐANG NGHE ' + '▮' * bars + '▯' * (5 - bars))
 
     def _on_transcript_ready(self, payload, context):
         if isinstance(payload, dict) and payload.get('transcript'):
@@ -360,7 +369,7 @@ class LocalVoiceWidget(QWidget):
                     border: 1px solid #F87171;
                 }
             ''')
-            self.prompt_label.setText('👉 Nói xong câu lệnh, bác nhấn nút "Dừng" để hệ thống chuyển thành chữ.')
+            self.prompt_label.setText('👉 Bác cứ nói bình thường. Nói xong, app tự dừng và chuyển thành chữ (hoặc nhấn "Dừng").')
         elif state == 'transcribing':
             self.verification_badge.setText('🔄 ĐANG CHUYỂN THÀNH CHỮ...')
             self.verification_badge.setStyleSheet('background: #EEF2FF; color: #4338CA; font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 4px; border: 1px solid #C7D2FE;')

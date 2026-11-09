@@ -29,6 +29,7 @@ import time
 from collections import deque
 from typing import Callable
 
+from shared.ai_runtime.overlay import OVERLAY
 log = logging.getLogger("AICloudDevice")
 
 PatientProvider = Callable[[], tuple[str | None, bool]]
@@ -110,6 +111,7 @@ class CloudDeviceRuntime:
         self.last_command = 0
         self.online = False
         self._pose = self._holistic = None
+        self._live_intake = None
         self._last_pts = None
         self._obs: deque = deque(maxlen=600)
         self._frames: deque = deque(maxlen=600)
@@ -200,6 +202,18 @@ class CloudDeviceRuntime:
                 self._holistic = self._make_holistic()
             res = self._holistic.process(frame)
             self._add_observation(now, res.pose, w, h)
+            mouth = None
+            try:  # local copy of the intake detector: only for the on-camera steps, the server decides
+                from features.medication.intake_monitoring.detector import IntakeDetector, mouth_center
+                from features.medication.intake_monitoring.domain import HolisticFrame
+
+                if self._live_intake is None:
+                    self._live_intake = IntakeDetector()
+                self._live_intake.feed(HolisticFrame(now, res.face, res.left_hand, res.right_hand))
+                mouth = mouth_center(res.face) if res.face else None
+            except Exception:
+                pass
+            OVERLAY.update(now, w, h, res.pose, (res.left_hand, res.right_hand), mouth, medication=True)
             hands = [p for hand in (res.left_hand, res.right_hand) if hand for p in hand]
             box = self.pillbox_box
             near = bool(box and any(box[0] <= x / w <= box[0] + box[2] and box[1] <= y / h <= box[1] + box[3]
@@ -215,7 +229,9 @@ class CloudDeviceRuntime:
         else:
             if self._pose is None:
                 self._pose = self._make_pose()
-            self._add_observation(now, self._pose.process(frame, int(now * 1000)), w, h)
+            landmarks = self._pose.process(frame, int(now * 1000))
+            self._add_observation(now, landmarks, w, h)
+            OVERLAY.update(now, w, h, landmarks)
             self._detect(frame, now)
 
     def _detect(self, frame, now: float) -> None:
@@ -324,6 +340,7 @@ class CloudDeviceRuntime:
             self.wake_camera()
         if not holistic:
             self._woken_for_window = False
+            self._live_intake = None
 
     # ------------------------------------------------------------ data sync (see replication.py)
 
@@ -382,8 +399,9 @@ class CloudDeviceRuntime:
     # ------------------------------------------------------------ voice
 
     def medication_view(self, pid: str | None):
-        """(window open, policy, live state): the server owns the policy and the detection in this mode."""
-        return self.medication_active(pid), None, None
+        """(window open, policy, live steps): the server owns the policy and the decision in this mode."""
+        live = self._live_intake.live() if self._live_intake is not None else None
+        return self.medication_active(pid), None, live
 
     def medication_active(self, pid: str | None = None) -> bool:
         return self.holistic_mode

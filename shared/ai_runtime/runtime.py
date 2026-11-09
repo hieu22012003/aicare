@@ -20,6 +20,7 @@ import threading
 import time
 from typing import Callable
 
+from shared.ai_runtime.overlay import OVERLAY
 from shared.ai_runtime.brain import AICoreBrain
 from shared.ai_runtime.store import AICoreStore
 from features.medication.intake_monitoring.domain import HolisticFrame
@@ -125,6 +126,10 @@ class AICoreRuntime:
             with self._lock:
                 self.brain.tick(now, home_patient=pid)
                 active = bool(pid) and self.brain.medication_active(pid)
+                due_now = bool(pid) and pid in self.brain.due_events
+                self.brain.due_events.clear()
+            if due_now:
+                self._woken_for_window = False  # dose time: bring the camera page forward again
             self._camera_for_medication(active)
 
     def _camera_for_medication(self, active: bool) -> None:
@@ -167,6 +172,8 @@ class AICoreRuntime:
             with self._lock:
                 self.brain.on_observation(pid, obs)
                 self.brain.on_holistic(pid, hframe)
+            OVERLAY.update(now, w, h, res.pose, (res.left_hand, res.right_hand),
+                           (mouth[0] * w, mouth[1] * h) if mouth else None, medication=True)
         else:
             if self._pose is None:
                 from shared.vision.pose.estimator import PoseEstimator
@@ -175,6 +182,7 @@ class AICoreRuntime:
             landmarks = self._pose.process(frame, int(now * 1000))
             with self._lock:
                 self.brain.on_observation(pid, Observation(now, landmarks, w, h, Identity.PATIENT, 0, self._person_boxes()))
+            OVERLAY.update(now, w, h, landmarks)
         if detections is not None:
             with self._lock:
                 self.brain.on_detections(pid, detections)
@@ -207,14 +215,17 @@ class AICoreRuntime:
     # ------------------------------------------------------------ voice / UI
 
     def medication_view(self, pid: str | None):
-        """(window open, policy, live intake state) for the on-camera banner."""
+        """(window open, policy, live intake state incl. confirmed_at) for the on-camera banner."""
         if not pid:
             return False, None, None
         with self._lock:
             s = self.brain.sessions.get(pid)
-            if not s or not self.brain.medication_active(pid):
+            if not s:
                 return False, None, None
-            return True, s.med.policy, s.intake.live()
+            live = dict(s.intake.live(), confirmed_at=s.confirmed_at)
+            if not self.brain.medication_active(pid):
+                return False, s.med.policy, live
+            return True, s.med.policy, live
 
     def handle_transcript(self, patient_id: str, text: str) -> str | None:
         with self._lock:

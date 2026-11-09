@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections import deque
 import time
 import unicodedata
 from dataclasses import dataclass, field
@@ -104,6 +105,7 @@ class _Session:
     active_doses: set = field(default_factory=set)
     last_seen: float = 0.0
     loaded_at: float = 0.0
+    confirmed_at: float = 0.0  # last dose confirmed by the camera (on-camera "đã ghi nhận" message)
 
 
 def _norm(text: str) -> str:
@@ -137,6 +139,9 @@ class AICoreBrain:
         self.speak_to = speak_to
         self.clock = clock
         self.sessions: dict[str, _Session] = {}
+        # Patients whose dose time just arrived (the home app brings the camera page forward). Bounded: the
+        # cloud backend never reads it.
+        self.due_events: deque = deque(maxlen=20)
 
     def _say(self, patient_id: str, text: str) -> None:
         if self.speak_to is not None:
@@ -362,7 +367,10 @@ class AICoreBrain:
         if speak_due:
             names = ", ".join(sorted({d["medication_name_snapshot"] for d in speak_due}))
             where = self._pillbox_hint(s, now)
-            self._say(s.patient_id, f"{h.capitalize()} ơi, đến giờ uống thuốc {names} rồi.{where}")
+            self.due_events.append(s.patient_id)
+            # Leading BEL: the speaker plays the reminder chime first (field 09/11).
+            self._say(s.patient_id, f"\a{h.capitalize()} ơi, đến giờ uống thuốc {names} rồi.{where} "
+                                    f"{h.capitalize()} cầm viên thuốc đưa lên miệng trước camera nhé.")
         if speak_overdue:
             in_view = bool(s.last_seen and now - s.last_seen < 120)
             extra = "" if in_view else f" Uống xong {h} bấm nút Đã uống giúp cháu nhé."
@@ -387,6 +395,7 @@ class AICoreBrain:
                 ev = self.store.add_evidence(d["occurrence_id"], s.patient_id, obs)
                 confirmed |= self.store.confirm_dose_by_camera(d["occurrence_id"], s.patient_id, ev, obs.ts)
             if confirmed:
+                s.confirmed_at = obs.ts
                 self._say(s.patient_id, f"Cháu đã ghi nhận {h} uống thuốc rồi ạ.")
         else:
             for d in batch:

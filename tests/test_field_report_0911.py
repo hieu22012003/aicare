@@ -56,7 +56,7 @@ def test_banner_while_window_open():
     assert lines[0].startswith("ĐANG GIÁM SÁT UỐNG THUỐC") and "21:23" in lines[0] and "Amlor 5mg" in lines[0]
     assert "phút đến giờ uống" in lines[1]
     live = banner_lines(DB(), "p_banner2", True, live={"hand_at_mouth": True, "mouth_open": False})
-    assert live[1].startswith("Đã thấy tay đưa lên miệng")
+    assert "[x] 2. Đưa lên miệng" in live[1]
 
 
 def test_vietnamese_speech_text_and_voice_choice():
@@ -92,3 +92,109 @@ def test_weak_sad_is_shown_as_neutral():
     e._ema, e._ema_ts, e._stable_idx, e._challenger, e._challenger_since = None, 0.0, None, None, 0.0
     shown = [e._stable_label(np.array([0.31, 0.30, 0.39]), t / 30) for t in range(60)]
     assert set(shown) == {0}
+
+
+# ---------------------------------------------------------------- request 09/11 (22:57)
+def _recorder_with(chunks, rate=16000):
+    from features.voice_assistant.local_voice.recorder import AudioRecorder
+
+    r = AudioRecorder(30)
+    r.rate = rate
+    for c in chunks:
+        r._vad(np.asarray(c, dtype=np.float32))
+    return r
+
+
+def test_recording_stops_by_itself_after_the_sentence():
+    rng = np.random.default_rng(1)
+    noise = lambda s: rng.normal(0, 0.003, int(16000 * s))  # noqa: E731
+    t = np.arange(int(16000 * 1.2)) / 16000
+    speech = 0.2 * np.sin(2 * np.pi * 180 * t) * (1 + 0.5 * np.sin(2 * np.pi * 4 * t))
+    chunks = [c for part in (noise(0.5), speech, noise(0.5)) for c in np.array_split(part, max(1, len(part) // 800))]
+    r = _recorder_with(chunks)
+    assert r.auto_stop() is None  # 0.5 s after the voice: still listening
+    r = _recorder_with(chunks + list(np.array_split(noise(0.6), 12)))
+    assert r.auto_stop() == "end"
+
+
+def test_recording_gives_up_when_nobody_speaks():
+    rng = np.random.default_rng(2)
+    r = _recorder_with(np.array_split(rng.normal(0, 0.003, 16000 * 8), 160))
+    assert r.auto_stop() == "no_speech"
+
+
+def test_real_voice_is_detected():
+    from features.voice_assistant.voice_ai.audio import vi_tts
+
+    if vi_tts._model_dir() is None:
+        pytest.skip("voice model not present")
+    pytest.importorskip("sherpa_onnx")
+    import tempfile, wave
+
+    path = tempfile.mktemp(suffix=".wav")
+    assert vi_tts.synthesize("Gọi con giúp tôi", path)
+    with wave.open(path) as w:
+        rate = w.getframerate()
+        audio = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float32) / 32768 * 0.5
+    rng = np.random.default_rng(3)
+    full = np.concatenate([rng.normal(0, 0.002, rate // 2), audio, rng.normal(0, 0.002, rate * 2)])
+    r = _recorder_with(np.array_split(full, len(full) // 1024), rate=rate)
+    assert r.auto_stop() == "end"
+
+
+def test_chime_wav(tmp_path):
+    import wave
+
+    from features.voice_assistant.voice_ai.audio import vi_tts
+
+    p = tmp_path / "c.wav"
+    vi_tts.write_chime(str(p))
+    with wave.open(str(p)) as w:
+        assert 1.4 < w.getnframes() / w.getframerate() < 1.8
+
+
+def test_dose_reminder_starts_with_the_chime_and_wakes_the_camera():
+    from shared.ai_runtime.brain import AICoreBrain
+
+    said = []
+    b = AICoreBrain.__new__(AICoreBrain)
+    b.speak, b.speak_to = said.append, None
+    from collections import deque
+
+    b.due_events = deque(maxlen=20)
+    b._say("p", "\aBác ơi, đến giờ uống thuốc")
+    assert said[0].startswith("\a")
+
+
+def test_banner_shows_the_three_steps_and_the_confirmation():
+    t = datetime.now(UTC) - timedelta(minutes=1)
+
+    class DB:
+        def fetchall(self, q, a):
+            return [{"name": "Amlor 5mg", "dose": "1 viên", "scheduled_at_utc": t.isoformat(),
+                     "local_scheduled_time": "2026-11-09T21:23:00", "state": "PENDING"}]
+
+    lines = banner_lines(DB(), "p_steps", True, live={"pill_held": True, "hand_at_mouth": True, "mouth_open": False,
+                                                      "hands_seen": True})
+    assert "[x] 1. Cầm thuốc" in lines[1] and "[x] 2. Đưa lên miệng" in lines[1] and "[ ] 3. Há miệng" in lines[1]
+    done = banner_lines(DB(), "p_steps2", False, live={"confirmed_at": datetime.now(UTC).timestamp()})
+    assert done[0] == "ĐÃ GHI NHẬN UỐNG THUỐC"
+
+
+def test_posture_label_from_upper_body():
+    from shared.ai_runtime.overlay import LiveOverlay
+    from shared.vision.pose.landmarks import Landmark
+
+    def pose(shoulder_y):
+        pts = [Landmark(0.5, 0.5, 0.0, 0.1) for _ in range(33)]
+        pts[0] = Landmark(0.5, shoulder_y - 0.25, 0.0, 0.9)
+        pts[11], pts[12] = Landmark(0.65, shoulder_y, 0.0, 0.9), Landmark(0.35, shoulder_y, 0.0, 0.9)
+        return tuple(pts)
+
+    ov = LiveOverlay()
+    ov.update(1.0, 640, 480, pose(0.78))
+    assert ov.posture_text().startswith("Tư thế: Ngồi")
+    ov.update(1.1, 640, 480, pose(0.32))
+    assert ov.posture_text().startswith("Tư thế: Đứng")
+    frame = np.zeros((480, 640, 3), np.uint8)
+    assert ov.draw(frame, now=1.2).sum() > 0  # skeleton + label drawn

@@ -90,11 +90,16 @@ class IntakeDetector:
         self._candidate: IntakeObservation | None = None
         self._tilt_base: deque = deque(maxlen=60)
         self._last_ts = 0.0
+        self._hands_seen_at = 0.0
 
     def live(self) -> dict:
-        """What the detector sees right now (for the on-camera banner)."""
+        """The three steps the on-camera banner shows: pill held (pinch), hand at the mouth, mouth open."""
         touching = self._contact_start is not None and self._contact_end is None
-        return {"hand_at_mouth": touching, "mouth_open": touching and self._open_at is not None}
+        pinch = self._pinch_at is not None and self._last_ts - self._pinch_at <= self.config.pinch_recent_seconds + (
+            (self._last_ts - self._contact_start) if touching else 0.0)
+        return {"pill_held": bool(pinch), "hand_at_mouth": touching,
+                "mouth_open": touching and self._open_at is not None, "hands_seen": self._hands_seen_at > 0
+                and self._last_ts - self._hands_seen_at < 1.0}
 
     def _hands(self, f: HolisticFrame) -> list[tuple[str, tuple]]:
         out = []
@@ -123,6 +128,8 @@ class IntakeDetector:
         nose = nose_ratio(f.face)
 
         best_hand, best_gap = None, 9.9
+        if f.left_hand or f.right_hand:
+            self._hands_seen_at = f.ts
         for name, pts in self._hands(f):
             if pinch_ratio(pts) <= cfg.pinch_ratio:
                 self._pinch_at = f.ts

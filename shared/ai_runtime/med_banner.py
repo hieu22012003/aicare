@@ -22,9 +22,11 @@ def _epoch(iso: str) -> float:
 def banner_lines(db, patient_id: str | None, active: bool, policy=None, live: dict | None = None,
                  now: float | None = None) -> list[str] | None:
     """Two or three short lines for the video overlay, or None when no medication window is open."""
+    now = time.time() if now is None else now
+    if live and live.get("confirmed_at") and now - float(live["confirmed_at"]) < 20:
+        return ["ĐÃ GHI NHẬN UỐNG THUỐC", "Camera đã thấy cầm thuốc, đưa lên miệng và uống. Đã cập nhật lịch thuốc."]
     if not active or not patient_id or db is None:
         return None
-    now = time.time() if now is None else now
     key = (patient_id, int(now // 2))
     if _cache["key"] == key:
         doses = _cache["value"]
@@ -50,8 +52,16 @@ def banner_lines(db, patient_id: str | None, active: bool, policy=None, live: di
     names = ", ".join(sorted({str(d["name"]).split(" (")[0] for d in batch}))
     hhmm = str(batch[0]["local_scheduled_time"])[11:16]
     lines = [f"ĐANG GIÁM SÁT UỐNG THUỐC  ·  {hhmm}  ·  {names}"]
-    if live and live.get("hand_at_mouth"):
-        lines.append("Đã thấy tay đưa lên miệng" + (", miệng đang há" if live.get("mouth_open") else " – há miệng khi uống"))
+    if live is not None:
+        def mark(ok):
+            return "[x]" if ok else "[ ]"
+
+        lines.append(f"{mark(live.get('pill_held'))} 1. Cầm thuốc (ngón cái + ngón trỏ)   "
+                     f"{mark(live.get('hand_at_mouth'))} 2. Đưa lên miệng   "
+                     f"{mark(live.get('mouth_open'))} 3. Há miệng cho thuốc vào")
+        if not live.get("hands_seen") and not live.get("hand_at_mouth"):
+            lines.append("Chưa thấy tay: giơ tay cầm thuốc vào khung hình" if now >= first
+                         else f"Còn {max(1, round((first - now) / 60))} phút đến giờ uống. Cầm viên thuốc trước camera.")
     elif now < first:
         lines.append(f"Còn {max(1, round((first - now) / 60))} phút đến giờ uống. Cầm viên thuốc trước camera.")
     else:

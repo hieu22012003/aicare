@@ -75,8 +75,9 @@ class TTSPlaybackCoordinator:
 
     def speak(self, text: str) -> None:
         """Speaks text aloud asynchronously with automatic barge-in cancellation of prior speech."""
-        clean_text = (text or "").strip()
-        if not clean_text:
+        chime = (text or "").startswith("\a")  # medication due: chime, then the sentence
+        clean_text = (text or "").strip("\a \n\t")
+        if not clean_text and not chime:
             return
 
         if os.getenv("AI_CARE_DISABLE_TTS") == "1":
@@ -88,10 +89,11 @@ class TTSPlaybackCoordinator:
 
         # Bundled Vietnamese voice first, then a real Vietnamese Windows voice (see vi_tts.py: the old inline
         # pyttsx3 picker chose "Microsoft David" because its id contains "vi", so reminders were unintelligible).
-        cmd = [sys.executable, "-m", "features.voice_assistant.voice_ai.audio.vi_tts", clean_text]
+        flag = ["--chime"] if chime else []
+        cmd = [sys.executable, "-m", "features.voice_assistant.voice_ai.audio.vi_tts", *flag, clean_text]
 
         if getattr(sys, 'frozen', False):
-            cmd = [sys.executable, '--local-tts', clean_text]
+            cmd = [sys.executable, '--local-tts', ("\a" if chime else "") + clean_text]
 
         with self._proc_lock:
             if self._recording_suspended:

@@ -34,12 +34,15 @@ class IntakeConfig(BaseModel):
     fingers: Fingers = Field(Fingers.THUMB_INDEX, description="thumb + index both at the mouth, or any fingertip")
     gesture_counts_as_taken: bool = Field(
         True, description="two fingers at the mouth + mouth open = taken (VERIFIED) without waiting for a drink")
-    pinch_ratio: float = Field(0.25, gt=0, le=1, description="thumb-index tip gap / hand width")
+    # Measured 09/11 on the customer's webcam with MediaPipe Holistic: fingers just touching the lips gave a
+    # thumb-index ratio of 0.56-1.2 and a mouth ratio of 0.04-0.09 (closed); holding a pill brings the two
+    # tips together (< ~0.3) and putting it in needs the mouth visibly open (> ~0.2).
+    pinch_ratio: float = Field(0.35, gt=0, le=1, description="thumb-index tip gap / hand width")
     pinch_recent_seconds: float = Field(3.0, gt=0, le=30)
     mouth_distance_ratio: float = Field(0.5, gt=0, le=2, description="fingertip-mouth gap / face width")
     hold_seconds: float = Field(0.3, gt=0, le=5)
     long_hold_reject_seconds: float = Field(5.0, gt=0, le=60, description="phone call, chin rest")
-    mouth_open_ratio: float = Field(0.35, gt=0, le=2, description="inner lip gap / mouth width")
+    mouth_open_ratio: float = Field(0.22, gt=0, le=2, description="inner lip gap / mouth width")
     open_slack_seconds: float = Field(1.0, ge=0, le=5)
     drink_window_seconds: float = Field(60.0, gt=0, le=600)
     head_tilt_drop: float = Field(0.06, gt=0, le=0.5, description="drop of the nose position ratio when tilting back")

@@ -657,8 +657,13 @@ class DashboardWindow(QMainWindow):
         root_layout.addWidget(self.local_voice_widget)
         self.medication_tabs.currentChanged.connect(self._invalidate_voice_context)
         import os
-        if os.getenv('VOICE_AI_ENABLED', 'false').lower() == 'true':
+        voice_mode = os.getenv('VOICE_AI_ENABLED', 'auto').lower()
+        if voice_mode == 'true':
             self._enable_local_voice()
+        elif voice_mode not in ('false', 'off', '0'):
+            # Load the speech model shortly after start-up, so the first press records at once instead of
+            # waiting for the model while the elder is already speaking (field 09/11).
+            QTimer.singleShot(8000, self._enable_local_voice)
 
         # 4. BOTTOM STATUS BAR
         self.status_bar_lbl = QLabel(f"Thông báo lúc {datetime.now().strftime('%H:%M:%S')}: Nhắc thuốc khi ứng dụng đang mở")
@@ -695,7 +700,7 @@ class DashboardWindow(QMainWindow):
             annotated_frame = self.router.emotion_adapter.draw_emotion_badge(
                 annotated_frame, emo_res["emotion_vi"], emo_res["confidence"]
             )
-            return self._draw_medication_banner(annotated_frame)
+            return self._draw_medication_banner(annotated_frame, skeleton=False)  # rehab draws its own skeleton
         else:
             # 1. Real-time Emotion Recognition on clean frame
             emo_res = self.router.emotion_adapter.process_frame(frame)
@@ -710,21 +715,42 @@ class DashboardWindow(QMainWindow):
             )
             return self._draw_medication_banner(annotated_frame)
 
-    def _draw_medication_banner(self, frame: np.ndarray) -> np.ndarray:
-        """While a medication window is open the video says so (and what the camera sees) on top."""
+    def _draw_medication_banner(self, frame: np.ndarray, skeleton: bool = True) -> np.ndarray:
+        """Skeleton + posture label, hand landmarks and their path during a medication window (from the AI
+        worker's latest MediaPipe result), and the medication banner on top."""
         try:
             from shared.ai_runtime.app_hooks import get_runtime
             from shared.ai_runtime.med_banner import banner_lines, draw_banner
+            from shared.ai_runtime.overlay import OVERLAY
 
+            frame = OVERLAY.draw(frame, skeleton=skeleton)
             runtime = get_runtime()
             if runtime is None or not hasattr(runtime, "medication_view"):
                 return frame
             pid = getattr(self, "_active_resolved_pid", None) or getattr(self.today_todo_widget, "patient_id", None)
             active, policy, live = runtime.medication_view(pid)
-            return draw_banner(frame, banner_lines(self.unified_db, pid, active, policy, live))
+            lines = banner_lines(self.unified_db, pid, active, policy, live)
+            if lines and lines[0].startswith("ĐÃ GHI NHẬN") and not getattr(self, "_confirm_refreshed", False):
+                self._confirm_refreshed = True
+                QTimer.singleShot(0, self._refresh_after_camera_confirm)
+            elif not lines or not lines[0].startswith("ĐÃ GHI NHẬN"):
+                self._confirm_refreshed = False
+            return draw_banner(frame, lines)
         except Exception:
             logger.debug("medication banner failed", exc_info=True)
             return frame
+
+    def _refresh_after_camera_confirm(self) -> None:
+        """The camera confirmed a dose: refresh "Việc cần làm hôm nay" so the button turns into "Đã uống"."""
+        try:
+            widget = getattr(self, "today_todo_widget", None)
+            for name in ("refresh", "reload", "load_today", "refresh_data"):
+                if widget is not None and hasattr(widget, name):
+                    getattr(widget, name)()
+                    break
+            self.update_dashboard_ui()
+        except Exception:
+            logger.debug("refresh after camera confirmation failed", exc_info=True)
 
     def _record_camera_emotion(self, frame: np.ndarray, result: Dict[str, Any], hardware_camera: bool) -> None:
         """Sample fresh camera results, never a stale JSON result or a test video."""

@@ -10,6 +10,7 @@ class VoiceSessionController(QObject):
     changed = pyqtSignal(str, str)
     transcript_ready = pyqtSignal(object, object)
     transcript_captured = pyqtSignal(object, object)
+    level = pyqtSignal(float)
 
     def __init__(self, config, context_provider, parent=None, worker_target=run_worker):
         super().__init__(parent)
@@ -23,7 +24,7 @@ class VoiceSessionController(QObject):
         self.config, self.worker_target = config, worker_target
         ctx = mp.get_context('spawn')
         self.commands = ctx.Queue(maxsize=2)
-        self.events = ctx.Queue(maxsize=8)
+        self.events = ctx.Queue(maxsize=32)
         self.process = ctx.Process(target=worker_target, args=(config, self.commands, self.events), daemon=True)
         self.process.start()
         self.timer = QTimer(self)
@@ -35,7 +36,7 @@ class VoiceSessionController(QObject):
             return
         self.shutdown()
         ctx = mp.get_context('spawn')
-        self.commands, self.events = ctx.Queue(maxsize=2), ctx.Queue(maxsize=8)
+        self.commands, self.events = ctx.Queue(maxsize=2), ctx.Queue(maxsize=32)
         self.process = ctx.Process(target=self.worker_target,
                                    args=(self.config, self.commands, self.events), daemon=True)
         self.closed = False
@@ -121,8 +122,12 @@ class VoiceSessionController(QObject):
                     self.release_tts()
                     self.change('idle', 'Đã hủy. Có thể dùng nút bấm.')
                 elif token == self.session and self.session:
-                    if kind == 'recording':
-                        self.change('recording', 'Đang nghe. Nhấn Dừng khi nói xong.')
+                    if kind == 'level':
+                        self.level.emit(float(payload or 0.0))
+                    elif kind == 'recording':
+                        device = (payload or {}).get('device') if isinstance(payload, dict) else ''
+                        self.change('recording', 'Đang nghe… Bác cứ nói, nói xong app tự dừng'
+                                    + (f' (micro: {device})' if device else '') + '.')
                     elif kind == 'transcribing':
                         self.release_tts()
                         self.change('transcribing', 'Đang chuyển giọng nói thành chữ...')
