@@ -27,12 +27,23 @@ from zoneinfo import ZoneInfo
 
 from shared.database.connection import UnifiedDatabaseManager
 from shared.database.outbox_helper import insert_outbox_event
-from features.exercise_rehab.rehab_session_adapter import ensure_default_rehab_plans
+from features.exercise_rehab.rehab_session_adapter import DEFAULT_REHAB_EXERCISES, ensure_default_rehab_plans
 from features.web_portal.auth import AuthService
 from shared.services.credential_security import hash_password
 from features.voice_assistant.voice_ai.config import VOICE_AI_ENABLED
 from features.voice_assistant.voice_ai.domain.contracts import ExecutionStatus
 from features.voice_assistant.voice_ai.realtime.assistance_coordinator import AssistanceCoordinator
+
+def _split_strength(raw: Any, unit: Any = None) -> Tuple[str, str]:
+    """('500 mg', None) -> ('500', 'mg'); ('40', 'mg') -> ('40', 'mg'); (None, None) -> ('500', 'mg')."""
+    text = str(raw if raw not in (None, "") else "500").strip()
+    unit_text = str(unit or "").strip()
+    m = re.match(r"^([0-9]+(?:[.,][0-9]+)?)\s*([^0-9\s].*)?$", text)
+    if m:
+        value, typed_unit = m.group(1), (m.group(2) or "").strip()
+        return value, (unit_text or typed_unit or "mg")
+    return text, (unit_text or "mg")
+
 
 logger = logging.getLogger("ApiRouter")
 UTC = timezone.utc
@@ -103,7 +114,16 @@ class ApiRouter:
         role = session["role"]
 
         if method == "GET" and path == "/api/auth/me":
-            return 200, {"user": session}
+            me: Dict[str, Any] = {"user": session}
+            if role == "clinician":
+                with self.db.connect() as conn:
+                    cl = conn.fetchone(
+                        "SELECT clinician_id, workplace, specialty, is_simulation FROM clinicians WHERE user_id = ?",
+                        (user_id,),
+                    )
+                if cl:
+                    me["clinician"] = dict(cl)
+            return 200, me
 
         if method == "POST" and path == "/api/auth/logout":
             self.auth.revoke_session(token)
@@ -260,7 +280,9 @@ class ApiRouter:
                     return self._get_measurement_requests(patient_id, query_params)
                 elif len(parts) == 4 and method == "POST":
                     return self._create_measurement_request(patient_id, user_id, body)
-                elif len(parts) >= 6 and parts[5] in ("cancel", "delete") and method == "POST":
+                elif (len(parts) >= 6 and parts[5] in ("cancel", "delete") and method == "POST") or (
+                    len(parts) == 5 and method == "DELETE"
+                ):
                     request_id = parts[4]
                     return self._cancel_measurement_request(patient_id, request_id, user_id, body)
             elif sub_resource == "caregiver-reports":
@@ -294,6 +316,14 @@ class ApiRouter:
                     return self._mark_recommendation_read(patient_id, rec_id, user_id)
                 elif method == "GET":
                     return self._get_recommendations(patient_id)
+                elif role != "clinician":
+                    return 403, {"error": "Chỉ bác sĩ phụ trách mới được soạn hoặc thu hồi lời khuyên chuyên môn."}
+                elif (len(parts) >= 6 and parts[5] in ("revoke", "delete") and method == "POST") or (
+                    len(parts) == 5 and method == "DELETE"
+                ):
+                    return self._revoke_recommendation(patient_id, parts[4], user_id)
+                elif len(parts) == 5 and method in ("PUT", "PATCH"):
+                    return self._add_recommendation(patient_id, user_id, body, replaces=parts[4])
                 elif method == "POST":
                     return self._add_recommendation(patient_id, user_id, body)
             elif sub_resource == "emergency-contacts":
@@ -1457,6 +1487,19 @@ class ApiRouter:
                     """,
                     (p["prescription_id"],),
                 )
+                for it in items:
+                    sched = conn.fetchone(
+                        """
+                        SELECT local_times FROM medication_schedules
+                        WHERE prescription_item_id = ?
+                        ORDER BY is_active DESC, revision DESC LIMIT 1
+                        """,
+                        (it["prescription_item_id"],),
+                    )
+                    try:
+                        it["local_times"] = sorted(json.loads(sched["local_times"])) if sched else []
+                    except (TypeError, ValueError):
+                        it["local_times"] = []
                 p["items"] = items
             return 200, {"prescriptions": prescriptions}
 
@@ -1557,8 +1600,8 @@ class ApiRouter:
                             else:
                                 med_name = it.get("medication_name") or it.get("brand_name") or "Thuốc"
                                 gen_name = it.get("generic_name") or med_name
-                                str_val = str(it.get("product_strength") or it.get("strength") or "500")
-                                str_u = it.get("strength_unit") or "mg"
+                                str_val, str_u = _split_strength(
+                                    it.get("product_strength") or it.get("strength"), it.get("strength_unit"))
                                 form = it.get("form") or it.get("dosage_form") or "Viên nén"
 
                             conn.execute(
@@ -1572,8 +1615,8 @@ class ApiRouter:
                     else:
                         med_name = it.get("medication_name") or it.get("brand_name") or "Thuốc mới"
                         gen_name = it.get("generic_name") or med_name
-                        str_val = str(it.get("product_strength") or it.get("strength") or "500")
-                        str_u = it.get("strength_unit") or "mg"
+                        str_val, str_u = _split_strength(
+                            it.get("product_strength") or it.get("strength"), it.get("strength_unit"))
                         form = it.get("form") or it.get("dosage_form") or "Viên nén"
                         med = conn.fetchone(
                             "SELECT medication_id FROM medications WHERE brand_name = ?", (med_name,)
@@ -1741,7 +1784,7 @@ class ApiRouter:
 
                 new_version = old_p["version"] + 1
                 new_p_id = f"rx_{uuid.uuid4().hex[:16]}"
-                new_code = f"Đơn thuốc điều chỉnh v{new_version}"
+                new_code = old_p.get("prescription_code") or f"DON-{uuid.uuid4().hex[:6].upper()}"
 
                 # 1. Supersede old prescription
                 conn.execute("UPDATE prescriptions SET status = 'SUPERSEDED', valid_to = ? WHERE prescription_id = ?", (now_iso, prescription_id))
@@ -1785,8 +1828,9 @@ class ApiRouter:
                             med_id = existing_m["medication_id"]
                         else:
                             med_id = f"med_c_{uuid.uuid4().hex[:8]}"
-                            strength = str(it.get("product_strength") or it.get("dose_amount") or "500")
-                            unit = str(it.get("strength_unit") or it.get("dose_unit") or "mg")
+                            strength, unit = _split_strength(
+                                it.get("product_strength") or it.get("dose_amount"),
+                                it.get("strength_unit") or (None if it.get("product_strength") else it.get("dose_unit")))
                             form = str(it.get("dosage_form") or "Viên nén")
                             conn.execute(
                                 """
@@ -1821,7 +1865,7 @@ class ApiRouter:
                     dose_amt = float(num_match.group(0)) if num_match else 1.0
                     dose_unit = it.get("dose_unit", "viên")
                     instr = it.get("instructions", "Uống sau ăn")
-                    times = it.get("local_times") or it.get("times") or ["08:00"]
+                    times = it.get("local_times") or it.get("times") or it.get("times_of_day") or ["08:00"]
 
                     conn.execute(
                         """
@@ -2051,6 +2095,26 @@ class ApiRouter:
         with self.db.connect() as conn:
             ensure_default_rehab_plans(conn, patient_id, default_time=default_time)
             conn.commit()
+            current = conn.fetchall(
+                "SELECT plan_id, exercise_id, target_count, local_reminder_time FROM rehab_plans "
+                "WHERE patient_id = ? AND is_active = 1",
+                (patient_id,),
+            )
+        defaults = {d["exercise_id"]: d["target_count"] for d in DEFAULT_REHAB_EXERCISES}
+        # Existing plans keep their history: each one that differs gets a new version, like a manual edit.
+        for plan in current:
+            target = defaults.get(plan["exercise_id"])
+            if target is None:
+                continue
+            if plan["target_count"] == target and plan["local_reminder_time"] == default_time:
+                continue
+            self._update_exercise_plan(
+                patient_id,
+                plan["plan_id"],
+                user_id,
+                {"target_count": target, "local_reminder_time": default_time, "reason": "Đặt lại chỉ tiêu mặc định"},
+            )
+        with self.db.connect() as conn:
             self._trigger_relay()
             self.auth.log_audit(user_id, "RESET_EXERCISE_PLANS", "patient", patient_id, {"time": default_time})
         return self._get_exercise_plans(patient_id)
@@ -2162,7 +2226,7 @@ class ApiRouter:
         raw_code = body.get("observation_type_id") or body.get("observation_type_code") or body.get("type_code") or "blood_pressure_systolic"
         instructions = body.get("instructions", "Người nhà nhắc đo chỉ số sức khỏe").strip()
         due_at_utc = body.get("due_at_utc")
-        local_due_time = body.get("local_due_time") or "Trong ngày hôm nay"
+        local_due_time = body.get("local_due_time")
         req_id = f"mreq_{uuid.uuid4().hex[:12]}"
         client_req_id = body.get("client_request_id") or req_id
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -2170,6 +2234,8 @@ class ApiRouter:
         if not due_at_utc:
             # Default to 4 hours from now
             due_at_utc = (datetime.now(timezone.utc) + timedelta(hours=4)).isoformat()
+        if not local_due_time:
+            local_due_time = self._local_due_label(due_at_utc)
 
         with self.db.connect() as conn:
             ot = conn.fetchone(
@@ -2227,6 +2293,21 @@ class ApiRouter:
             "observation_type_name": ot["name"],
             "message": "Đã gửi yêu cầu nhắc đo thành công",
         }
+
+    @staticmethod
+    def _local_due_label(due_at_utc: str) -> str:
+        """'08:00 hôm nay' / '08:00 ngày 11/11/2026' in the patient's timezone."""
+        try:
+            due = datetime.fromisoformat(str(due_at_utc).replace("Z", "+00:00"))
+            if due.tzinfo is None:
+                due = due.replace(tzinfo=timezone.utc)
+            tz = ZoneInfo("Asia/Ho_Chi_Minh")
+            due = due.astimezone(tz)
+            if due.date() == datetime.now(tz).date():
+                return f"{due:%H:%M} hôm nay"
+            return f"{due:%H:%M} ngày {due:%d/%m/%Y}"
+        except (TypeError, ValueError):
+            return "Trong ngày hôm nay"
 
     def _get_measurement_requests(
         self, patient_id: str, query_params: Dict[str, str]
@@ -2300,7 +2381,7 @@ class ApiRouter:
             self._trigger_relay()
             self.auth.log_audit(user_id, "CANCEL_MEASUREMENT_REQUEST", "measurement_request", request_id)
 
-        return 200, {"message": "Đã hủy yêu cầu nhắc đo", "request_id": request_id}
+        return 200, {"message": "Đã hủy yêu cầu nhắc đo", "request_id": request_id, "status": "cancelled"}
 
     def _get_medications_catalog(self) -> Tuple[int, Dict[str, Any]]:
         with self.db.connect() as conn:
@@ -2327,23 +2408,74 @@ class ApiRouter:
             )
             return 200, {"recommendations": recs}
 
-    def _add_recommendation(self, patient_id: str, user_id: str, body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
+    def _revoke_recommendation(self, patient_id: str, rec_id: str, user_id: str) -> Tuple[int, Dict[str, Any]]:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self.db.connect() as conn:
+            rec = conn.fetchone(
+                "SELECT recommendation_id, status FROM care_recommendations WHERE recommendation_id = ? AND patient_id = ?",
+                (rec_id, patient_id),
+            )
+            if not rec:
+                return 404, {"error": "Không tìm thấy lời khuyên"}
+            if rec["status"] == "ACTIVE":
+                conn.execute(
+                    "UPDATE care_recommendations SET status = 'REVOKED', valid_to = ? WHERE recommendation_id = ?",
+                    (now_iso, rec_id),
+                )
+                insert_outbox_event(
+                    conn=conn,
+                    patient_id=patient_id,
+                    event_type="recommendation.revoked",
+                    aggregate_type="care_recommendation",
+                    aggregate_id=rec_id,
+                    aggregate_version=1,
+                    occurred_at=now_iso,
+                    actor_id=user_id,
+                    source="web_clinician",
+                    payload_minimal={"recommendation_id": rec_id, "status": "REVOKED"},
+                )
+                conn.commit()
+                self._trigger_relay()
+                self.auth.log_audit(user_id, "REVOKE_RECOMMENDATION", "care_recommendation", rec_id)
+        return 200, {"recommendation_id": rec_id, "status": "REVOKED", "message": "Đã thu hồi lời khuyên"}
+
+    def _add_recommendation(
+        self, patient_id: str, user_id: str, body: Dict[str, Any], replaces: Optional[str] = None
+    ) -> Tuple[int, Dict[str, Any]]:
         cat = body.get("category", "general")
-        title = body.get("title", "").strip()
-        content = body.get("content", "").strip()
+        title = (body.get("title") or "").strip()
+        content = (body.get("content") or "").strip()
+        if cat not in ("nutrition", "exercise", "mental", "general"):
+            cat = "general"
+        if not title or not content:
+            return 400, {"error": "Vui lòng nhập tiêu đề và nội dung lời khuyên"}
         now_iso = datetime.now(timezone.utc).isoformat()
         rec_id = f"rec_{uuid.uuid4().hex[:16]}"
 
         with self.db.connect() as conn:
-            cl = conn.fetchone("SELECT clinician_id FROM clinicians WHERE user_id = ?", (user_id,))
+            cl = conn.fetchone("SELECT clinician_id, is_simulation FROM clinicians WHERE user_id = ?", (user_id,))
             clinician_id = cl["clinician_id"] if cl else "clinician_001"
+            is_sim = int(cl["is_simulation"]) if cl else 1
+            version = 1
+            if replaces:
+                old = conn.fetchone(
+                    "SELECT version, status FROM care_recommendations WHERE recommendation_id = ? AND patient_id = ?",
+                    (replaces, patient_id),
+                )
+                if not old:
+                    return 404, {"error": "Không tìm thấy lời khuyên cần sửa"}
+                version = int(old["version"]) + 1
+                conn.execute(
+                    "UPDATE care_recommendations SET status = 'SUPERSEDED', valid_to = ? WHERE recommendation_id = ?",
+                    (now_iso, replaces),
+                )
 
             conn.execute(
                 """
                 INSERT INTO care_recommendations (recommendation_id, patient_id, clinician_id, category, title, content, version, valid_from, valid_to, status, is_simulation, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, 1, ?, '2099-12-31T23:59:59Z', 'ACTIVE', 1, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, '2099-12-31T23:59:59Z', 'ACTIVE', ?, ?)
                 """,
-                (rec_id, patient_id, clinician_id, cat, title, content, now_iso, now_iso),
+                (rec_id, patient_id, clinician_id, cat, title, content, version, now_iso, is_sim, now_iso),
             )
             insert_outbox_event(
                 conn=conn,
@@ -2361,7 +2493,7 @@ class ApiRouter:
             self._trigger_relay()
             self.auth.log_audit(user_id, "POST_RECOMMENDATION", "care_recommendation", rec_id)
 
-        return 201, {"recommendation_id": rec_id, "status": "ACTIVE"}
+        return 201, {"recommendation_id": rec_id, "status": "ACTIVE", "version": version}
 
     # =========================================================================
     # EMERGENCY CONTACTS & CALL PROTOCOL
@@ -2372,8 +2504,27 @@ class ApiRouter:
                 "SELECT * FROM emergency_contacts WHERE patient_id = ? AND is_active = 1 ORDER BY priority ASC",
                 (patient_id,),
             )
-            # Evaluate duty hours right now
-            now_local_hhmm = datetime.now().strftime("%H:%M")
+            if not contacts:
+                # No hotline configured: fall back to the care-team doctor's phone entered by the admin.
+                doc = conn.fetchone(
+                    """
+                    SELECT u.full_name, u.phone FROM care_team ct
+                    JOIN clinicians c ON c.clinician_id = ct.clinician_id
+                    JOIN users u ON u.user_id = c.user_id
+                    WHERE ct.patient_id = ? AND ct.is_active = 1 AND u.is_active = 1 AND COALESCE(u.phone, '') != ''
+                    ORDER BY CASE WHEN ct.role_description LIKE '%phụ trách%' THEN 0 ELSE 1 END, ct.care_team_id
+                    LIMIT 1
+                    """,
+                    (patient_id,),
+                )
+                if doc:
+                    contacts = [{
+                        "contact_id": "care_team_doctor", "patient_id": patient_id, "contact_type": "clinician_on_duty",
+                        "contact_name": doc["full_name"], "phone": doc["phone"], "on_duty_start": "08:00",
+                        "on_duty_end": "17:00", "is_verified": 1, "is_active": 1, "priority": 1, "notes": "",
+                    }]
+            # Evaluate duty hours right now, on the patient's clock (the cloud server runs in UTC)
+            now_local_hhmm = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).strftime("%H:%M")
             for c in contacts:
                 start = c.get("on_duty_start", "08:00")
                 end = c.get("on_duty_end", "17:00")

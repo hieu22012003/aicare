@@ -345,7 +345,7 @@
     </div>
     <div class="emergency-actions">
       <a id="btnCallDoctor" class="btn-call disabled" href="#" onclick="handleCallClick(event)">
-        📞 Gọi Bác sĩ (DEMO)
+        📞 Gọi Bác sĩ
       </a>
       <button class="btn-copy" onclick="copyDoctorPhone()">📋 Sao chép số</button>
       <span style="font-size: 12px; color: var(--muted);" id="doctorHoursLbl">Giờ trực: --:--</span>
@@ -1130,6 +1130,46 @@
       }
     }
 
+    // Server timestamps are UTC (ISO with Z / +00:00). Show them on the patient's clock (Vietnam time).
+    // Strings without a timezone are wall-clock values typed by a person and are shown unchanged.
+    function vnParts(iso) {
+      const s = String(iso || "");
+      if (!s) return null;
+      if (!/(Z|[+-]\d{2}:?\d{2})$/.test(s)) {
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+        return m ? { y: m[1], mo: m[2], d: m[3], h: m[4] || "00", mi: m[5] || "00", s: m[6] || "00" } : null;
+      }
+      const dt = new Date(s);
+      if (isNaN(dt)) return null;
+      const p = {};
+      new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Ho_Chi_Minh", hourCycle: "h23", year: "numeric", month: "2-digit",
+        day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(dt).forEach(x => { p[x.type] = x.value; });
+      return { y: p.year, mo: p.month, d: p.day, h: p.hour, mi: p.minute, s: p.second };
+    }
+    function vnDate(iso) { const p = vnParts(iso); return p ? `${p.y}-${p.mo}-${p.d}` : "--"; }
+    function vnTime(iso) { const p = vnParts(iso); return p ? `${p.h}:${p.mi}` : "--"; }
+    function vnDateTime(iso, withSeconds) {
+      const p = vnParts(iso);
+      return p ? `${p.y}-${p.mo}-${p.d} ${p.h}:${p.mi}${withSeconds ? ":" + p.s : ""}` : "--";
+    }
+    function esc(v) {
+      return String(v ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+    }
+    // "500" + "mg" -> "500 mg"; a strength already typed with its unit ("500 mg") is not given a second one.
+    function strengthText(it) {
+      const s = String(it.product_strength ?? "").trim();
+      if (!s) return "";
+      const u = String(it.strength_unit || "mg").trim();
+      return /[^0-9.,\s]/.test(s) ? s : `${s} ${u}`;
+    }
+    function doseTimesText(it) {
+      return (it.local_times && it.local_times.length) ? it.local_times.join(", ") : "";
+    }
+    function localNowInput() {
+      const now = new Date();
+      return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    }
+
     async function apiCall(endpoint, method = "GET", body = null) {
       const headers = { "Content-Type": "application/json" };
       if (currentToken) headers["Authorization"] = `Bearer ${currentToken}`;
@@ -1140,7 +1180,12 @@
         window.location.href = "/login";
         return null;
       }
-      return await res.json();
+      try {
+        return await res.json();
+      } catch (e) {
+        // 502/504 from the host while the server restarts, or an empty body: report it instead of crashing the page
+        return { error: `Máy chủ chưa phản hồi (mã ${res.status}). Vui lòng thử lại sau ít phút.` };
+      }
     }
 
     function getLocalDateString() {
@@ -1182,7 +1227,7 @@
 
       document.getElementById("medDateInput").value = getLocalDateString();
       const chatObs = document.getElementById("chatObservedAt");
-      if (chatObs) chatObs.value = new Date().toISOString().slice(0, 16);
+      if (chatObs) chatObs.value = localNowInput();
       initVitalsEntryForm();
 
       loadAllData();
@@ -1223,11 +1268,17 @@
       heading.textContent = 'Yêu cầu giọng nói'; box.appendChild(heading);
       const requestLabels = {open:'Chờ tiếp nhận',acknowledged:'Đã tiếp nhận',resolved:'Đã giải quyết',cancelled:'Đã hủy/đính chính'};
       const deliveryLabels = {queued:'Chờ gửi',sent:'Máy chủ thư đã chấp nhận',failed:'Chưa gửi được',unknown:'Chưa rõ kết quả gửi',cancelled:'Đã hủy giao tin'};
+      if (!data || !data.requests || data.requests.length === 0) {
+        const empty = document.createElement('p');
+        empty.style.color = 'var(--muted)';
+        empty.textContent = 'Chưa có yêu cầu nào gửi bằng giọng nói từ người cao tuổi.';
+        box.appendChild(empty);
+      }
       for (const request of ((data && data.requests) || [])) {
         const row = document.createElement('div');
         row.style.padding = '10px';
         const text = document.createElement('p');
-        text.textContent = `${request.created_at} — ${request.original_text} — ${requestLabels[request.status] || request.status} (giao tin: ${deliveryLabels[request.delivery_status] || request.delivery_status})`;
+        text.textContent = `${vnDateTime(request.created_at)} — ${request.original_text} — ${requestLabels[request.status] || request.status} (giao tin: ${deliveryLabels[request.delivery_status] || request.delivery_status})`;
         row.appendChild(text);
         for (const [target, label] of [['acknowledged','Tiếp nhận'],['resolved','Đã giải quyết']]) {
           if ((target === 'acknowledged' && request.status !== 'open') || (target === 'resolved' && request.status !== 'acknowledged')) continue;
@@ -1373,7 +1424,7 @@
         else if (r.status === "MISSED") { badgeCls = "badge-danger"; statusText = "❌ Quá hạn (Không đo)"; }
         else if (r.status === "CANCELLED") { badgeCls = "badge-muted"; statusText = "🚫 Đã hủy"; }
 
-        const dueStr = r.local_due_time || (r.due_at_utc ? r.due_at_utc.slice(0, 16).replace("T", " ") : "--");
+        const dueStr = r.local_due_time || (r.due_at_utc ? vnDateTime(r.due_at_utc) : "--");
         const canCancel = (r.status === "PENDING");
 
         html += `
@@ -1593,7 +1644,7 @@
       if (!data) return;
       if (data.latest_blood_pressure) {
         document.getElementById("ovrBpVal").innerText = `${data.latest_blood_pressure.systolic}/${data.latest_blood_pressure.diastolic} mmHg`;
-        document.getElementById("ovrBpSub").innerText = `Đo lúc ${data.latest_blood_pressure.measured_at.slice(11, 16)} (${data.latest_blood_pressure.device_label})`;
+        document.getElementById("ovrBpSub").innerText = `Đo lúc ${vnTime(data.latest_blood_pressure.measured_at)} (${data.latest_blood_pressure.device_label})`;
       } else {
         document.getElementById("ovrBpVal").innerText = "-- / --";
         document.getElementById("ovrBpSub").innerText = "Chưa có số đo mới";
@@ -1601,7 +1652,7 @@
 
       if (data.latest_heart_rate) {
         document.getElementById("ovrHrVal").innerText = `${data.latest_heart_rate.value_numeric} bpm`;
-        document.getElementById("ovrHrSub").innerText = `Đo lúc ${data.latest_heart_rate.measured_at.slice(11, 16)}`;
+        document.getElementById("ovrHrSub").innerText = `Đo lúc ${vnTime(data.latest_heart_rate.measured_at)}`;
       } else {
         document.getElementById("ovrHrVal").innerText = "-- bpm";
         document.getElementById("ovrHrSub").innerText = "Chưa có số đo mới";
@@ -1610,7 +1661,7 @@
       if (data.latest_blood_glucose) {
         let gluVal = data.latest_blood_glucose.value_numeric;
         let gluUnit = data.latest_blood_glucose.unit_code;
-        let subTxt = `Đo lúc ${data.latest_blood_glucose.measured_at.slice(11, 16)}`;
+        let subTxt = `Đo lúc ${vnTime(data.latest_blood_glucose.measured_at)}`;
         if (gluUnit === 'mmol/L') {
           subTxt += ` (~${Math.round(gluVal * 18.0)} mg/dL)`;
         }
@@ -1629,7 +1680,7 @@
         const elVal = document.getElementById("ovrSpo2Val");
         if (elVal) elVal.innerText = `${data.latest_spo2.value_numeric}%`;
         const elSub = document.getElementById("ovrSpo2Sub");
-        if (elSub) elSub.innerText = `Đo lúc ${data.latest_spo2.measured_at.slice(11, 16)}`;
+        if (elSub) elSub.innerText = `Đo lúc ${vnTime(data.latest_spo2.measured_at)}`;
       } else {
         const elVal = document.getElementById("ovrSpo2Val");
         if (elVal) elVal.innerText = "-- %";
@@ -1660,15 +1711,25 @@
       if (data.assigned_doctor) {
         document.getElementById("ovrDoctorInfo").innerHTML = `
           <strong>${data.assigned_doctor.doctor_name}</strong> — ${data.assigned_doctor.specialty} (${data.assigned_doctor.workplace})<br>
-          <span style="color: var(--muted); font-size: 13px;">Tài khoản mô phỏng: ${data.assigned_doctor.is_simulation ? '✓ Demo' : 'Thật'}</span>
+          <span style="color: var(--muted); font-size: 13px;">Loại tài khoản: ${data.assigned_doctor.is_simulation ? 'Mô phỏng (Demo)' : 'Bác sĩ thực tế'}</span>
         `;
       }
     }
 
     async function loadEmergencyContacts() {
       const data = await apiCall(`/api/patients/${currentPatientId}/emergency-contacts`);
-      if (!data || !data.contacts) return;
-      const docContact = data.contacts.find(c => c.contact_type === "clinician_on_duty") || data.contacts[0];
+      const docContact = data && data.contacts
+        ? (data.contacts.find(c => c.contact_type === "clinician_on_duty") || data.contacts[0]) : null;
+      if (!docContact) {
+        currentDoctorPhone = "";
+        const btn = document.getElementById("btnCallDoctor");
+        btn.classList.add("disabled");
+        btn.removeAttribute("href");
+        btn.innerText = "📞 Chưa có số bác sĩ";
+        document.getElementById("doctorDutyTxt").innerText = "Chưa cấu hình số điện thoại bác sĩ phụ trách. Tình huống khẩn cấp vui lòng gọi 115.";
+        document.getElementById("doctorHoursLbl").innerText = "Giờ trực: chưa cấu hình";
+        return;
+      }
       if (docContact) {
         currentDoctorPhone = docContact.phone;
         const btnCall = document.getElementById("btnCallDoctor");
@@ -1698,7 +1759,9 @@
       const btnCall = document.getElementById("btnCallDoctor");
       if (btnCall.classList.contains("disabled")) {
         e.preventDefault();
-        alert("Nút gọi đang ở chế độ DEMO hoặc bác sĩ đang ngoài giờ trực. Hãy dùng số cấp cứu địa phương 115 khi cần hỗ trợ y tế khẩn cấp!");
+        alert(currentDoctorPhone
+          ? "Bác sĩ đang ngoài giờ trực hoặc số chưa được xác nhận. Hãy gọi cấp cứu 115 khi cần hỗ trợ y tế khẩn cấp!"
+          : "Chưa có số điện thoại bác sĩ phụ trách. Hãy gọi cấp cứu 115 khi cần hỗ trợ y tế khẩn cấp!");
       } else {
         // Log event
         apiCall(`/api/patients/${currentPatientId}/emergency-contact-events`, "POST", {
@@ -1709,7 +1772,7 @@
     }
 
     function copyDoctorPhone() {
-      if (!currentDoctorPhone) return;
+      if (!currentDoctorPhone) { alert("Chưa có số điện thoại bác sĩ để sao chép."); return; }
       navigator.clipboard.writeText(currentDoctorPhone);
       alert(`Đã sao chép số: ${currentDoctorPhone}`);
     }
@@ -1753,7 +1816,7 @@
         (data.readings || []).forEach(r => {
           const tr = document.createElement("tr");
           tr.innerHTML = `
-            <td>${r.measured_at.replace("T", " ").slice(0, 19)}</td>
+            <td>${vnDateTime(r.measured_at, true)}</td>
             <td><strong style="color: #dc2626;">${r.systolic || '--'}</strong></td>
             <td><strong style="color: #2563eb;">${r.diastolic || '--'}</strong></td>
             <td>${r.unit_code}</td>
@@ -1774,7 +1837,7 @@
         (data.readings || []).forEach(r => {
           const tr = document.createElement("tr");
           tr.innerHTML = `
-            <td>${r.measured_at.replace("T", " ").slice(0, 19)}</td>
+            <td>${vnDateTime(r.measured_at, true)}</td>
             <td colspan="2"><strong style="color: #7c3aed;">${r.value_numeric || '--'}</strong></td>
             <td>${r.unit_code}</td>
             <td>${r.device_label}</td>
@@ -1822,7 +1885,7 @@
         <div class="summary-chip">
           <div class="chip-label">Số đo gần nhất</div>
           <div class="chip-val" style="color: ${statusColor};">${latest.systolic}/${latest.diastolic} <span style="font-size: 13px; font-weight: 500;">mmHg</span></div>
-          <div class="chip-sub">Đo lúc ${latest.measured_at.slice(11, 16)} (${latest.device_label})</div>
+          <div class="chip-sub">Đo lúc ${vnTime(latest.measured_at)} (${latest.device_label})</div>
         </div>
         <div class="summary-chip">
           <div class="chip-label">Đánh giá nhanh</div>
@@ -1872,7 +1935,7 @@
         <div class="summary-chip">
           <div class="chip-label">Nhịp tim gần nhất</div>
           <div class="chip-val" style="color: #7c3aed;">${latest.value_numeric} <span style="font-size: 13px; font-weight: 500;">bpm</span></div>
-          <div class="chip-sub">Đo lúc ${latest.measured_at.slice(11, 16)}</div>
+          <div class="chip-sub">Đo lúc ${vnTime(latest.measured_at)}</div>
         </div>
         <div class="summary-chip">
           <div class="chip-label">Đánh giá nhanh</div>
@@ -2027,8 +2090,8 @@
         }
 
         const tDate = it.measured_at.slice(5, 10).replace('-', '/');
-        const tTime = it.measured_at.slice(11, 16);
-        const tipData = `data-date="${it.measured_at.slice(0, 19).replace('T', ' ')}" data-sys="${it.systolic || '--'}" data-dia="${it.diastolic || '--'}" data-src="${it.device_label || 'Thủ công'}"`;
+        const tTime = vnTime(it.measured_at);
+        const tipData = `data-date="${vnDateTime(it.measured_at, true)}" data-sys="${it.systolic || '--'}" data-dia="${it.diastolic || '--'}" data-src="${it.device_label || 'Thủ công'}"`;
 
         if (ySys != null) {
           svg += `<circle cx="${x}" cy="${ySys}" r="5" fill="#ef4444" stroke="#ffffff" stroke-width="2" class="vitals-dot" style="cursor: pointer;" ${tipData} onmouseenter="showChartTooltip(event)" onmouseleave="hideChartTooltip()" />`;
@@ -2130,7 +2193,7 @@
         if (idx % Math.max(1, Math.floor(items.length / 8)) === 0 || idx === items.length - 1) {
           svg += `
             <text x="${x}" y="${padT + plotH + 18}" font-size="10" fill="#475569" text-anchor="middle">${it.measured_at.slice(5, 10).replace('-', '/')}</text>
-            <text x="${x}" y="${padT + plotH + 30}" font-size="9" fill="#94a3b8" text-anchor="middle">${it.measured_at.slice(11, 16)}</text>
+            <text x="${x}" y="${padT + plotH + 30}" font-size="9" fill="#94a3b8" text-anchor="middle">${vnTime(it.measured_at)}</text>
           `;
         }
       });
@@ -2185,14 +2248,17 @@
           itemsHtml += `
             <div style="background: var(--bg); padding: 10px 14px; border-radius: 8px; margin-top: 8px; font-size: 13.5px; border-left: 3px solid var(--primary);">
               <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px;">
-                <strong style="color: var(--navy); font-size: 14px;">💊 ${it.brand_name} ${it.product_strength ? `(${it.product_strength} ${it.strength_unit || 'mg'})` : ''}</strong>
+                <strong style="color: var(--navy); font-size: 14px;">💊 ${esc(it.brand_name)} ${strengthText(it) ? `(${esc(strengthText(it))})` : ''}</strong>
                 <span style="font-weight: 600; color: #4338CA;">Liều: ${it.dose_amount} ${it.dose_unit || 'viên'}</span>
               </div>
               <div style="color: var(--muted); font-size: 12.5px; margin-top: 3px;">
                 ${it.generic_name ? `Hoạt chất: <em>${it.generic_name}</em> | ` : ''}Dạng: ${it.dosage_form || 'Viên nén'}
               </div>
               <div style="color: #1F2937; font-size: 13px; margin-top: 4px;">
-                👉 <strong>Chỉ dẫn dùng:</strong> ${it.original_instructions || 'Uống theo đơn'}
+                👉 <strong>Chỉ dẫn dùng:</strong> ${esc(it.original_instructions || 'Uống theo đơn')}
+              </div>
+              <div style="color: #4338CA; font-size: 13px; font-weight: 600; margin-top: 4px;">
+                ⏰ Giờ uống: ${esc(doseTimesText(it) || 'chưa đặt giờ')}
               </div>
             </div>
           `;
@@ -2253,7 +2319,7 @@
         let statusLabel = d.state;
         if (d.state === "CONFIRMED") {
           badgeCls = "badge-success";
-          const confirmTime = d.action_taken_at_utc ? ` (${d.action_taken_at_utc.slice(11, 16)})` : '';
+          const confirmTime = d.action_taken_at_utc ? ` (${vnTime(d.action_taken_at_utc)})` : '';
           statusLabel = `✓ Người già đã uống${confirmTime}`;
         } else if (d.state === "OVERDUE") {
           badgeCls = "badge-danger";
@@ -2355,7 +2421,7 @@
       const data = await apiCall(`/api/patients/${currentPatientId}/rehab/sessions`);
       const tbody = document.querySelector("#tblRehabSessions tbody");
       tbody.innerHTML = "";
-      (data.sessions || []).forEach(s => {
+      ((data && data.sessions) || []).forEach(s => {
         const tr = document.createElement("tr");
         let badgeCls = "badge-warning";
         if (s.status === "camera_verified_completed") badgeCls = "badge-success";
@@ -2405,7 +2471,7 @@
             <div class="chat-reply-item">
               <div style="display: flex; justify-content: space-between; font-weight: 700; color: #4338CA; font-size: 12px; margin-bottom: 3px;">
                 <span>👨‍⚕️ ${m.sender_name || 'Bác sĩ phụ trách'}:</span>
-                <span style="font-weight: normal; color: var(--muted); font-size: 11px;">${m.created_at.slice(11, 16)}</span>
+                <span style="font-weight: normal; color: var(--muted); font-size: 11px;">${vnTime(m.created_at)}</span>
               </div>
               <div style="color: #1e1b4b; line-height: 1.45;">${m.body}</div>
             </div>
@@ -2425,14 +2491,14 @@
               </span>
               <div style="display: flex; align-items: center; gap: 8px;">
                 ${statusBadge}
-                <span class="time">${r.created_at.replace("T", " ").slice(0, 16)}</span>
+                <span class="time">${vnDateTime(r.created_at)}</span>
               </div>
             </div>
             <div style="font-size: 14.5px; font-weight: 500; color: var(--navy); margin-top: 6px; line-height: 1.5;">
               ${r.description}
             </div>
             <div style="font-size: 12px; color: var(--muted); margin-top: 6px;">
-              ⏱️ Triệu chứng bắt đầu lúc: <strong>${r.observed_at.replace("T", " ").slice(0, 16)}</strong>
+              ⏱️ Triệu chứng bắt đầu lúc: <strong>${vnDateTime(r.observed_at)}</strong>
             </div>
 
             <!-- Doctor Replies inside stream -->
@@ -2466,7 +2532,7 @@
       }
       const severity = document.getElementById("chatReportSeverity").value;
       let obsTime = document.getElementById("chatObservedAt").value;
-      if (!obsTime) obsTime = new Date().toISOString().slice(0, 16);
+      if (!obsTime) obsTime = localNowInput();
 
       const res = await apiCall(`/api/patients/${currentPatientId}/caregiver-reports`, "POST", {
         description: desc,
@@ -2477,7 +2543,7 @@
       if (res && res.report_id) {
         input.value = "";
         await loadReports();
-        document.getElementById("chatObservedAt").value = new Date().toISOString().slice(0, 16);
+        document.getElementById("chatObservedAt").value = localNowInput();
       } else {
         alert(res?.error || "Không thể gửi tin nhắn tới bác sĩ.");
       }
@@ -2772,7 +2838,7 @@
 
       let html = "";
       rows.forEach(r => {
-        const timeStr = r.measured_at ? r.measured_at.replace("T", " ").slice(0, 16) : "--";
+        const timeStr = r.measured_at ? vnDateTime(r.measured_at) : "--";
 
         // BP
         let bpDisplay = "--";
@@ -3080,7 +3146,7 @@
       const objs = data.objects.sightings || [];
       document.getElementById("aiObjects").innerHTML = objs.length ? `<div style="color:#64748b; margin-bottom:4px">Lần thấy gần nhất:</div>` + objs.slice(0, 10).map((o) =>
         `<div><b>${aiEsc(o.name)}</b> · ${aiEsc(o.place)} · ${aiTime(o.last_seen_utc)} · ${aiEsc(st[o.status] || o.status)}</div>`).join("")
-        : "Chưa thấy đồ vật nào (cần cài model nhận diện đồ vật).";
+        : "Camera tại nhà chưa ghi nhận đồ vật nào. Danh sách sẽ hiện khi app tại nhà đang bật camera và nối với trang này.";
     }
 
     async function aiAskWhere() {

@@ -92,13 +92,18 @@ def sync_single_patient(db: UnifiedDatabaseManager, profile: Dict[str, Any], emi
         # 2. Ensure patient in patients table
         existing_pat = conn.fetchone("SELECT patient_id FROM patients WHERE patient_id = ?", (pat_id,))
         if existing_pat:
+            # A birth date already on record is exact; the profile's "age" is only an estimate
+            # (age 70 -> "1956-01-01"), so it may fill a blank but never replace a real date.
             conn.execute(
                 """
                 UPDATE patients
-                SET full_name = ?, gender = ?, notes = ?, date_of_birth = ?
+                SET full_name = ?, gender = ?, notes = ?,
+                    date_of_birth = CASE
+                        WHEN ? = 1 OR date_of_birth IS NULL OR date_of_birth = '' THEN ?
+                        ELSE date_of_birth END
                 WHERE patient_id = ?
                 """,
-                (pname, gender, notes, dob, pat_id),
+                (pname, gender, notes, 1 if profile.get("date_of_birth") else 0, dob, pat_id),
             )
         else:
             conn.execute(

@@ -9,7 +9,11 @@ import logging
 import os
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:  # cloud backend installs requirements-backend.txt only; .env is optional there
+    def load_dotenv(*_args, **_kwargs):
+        return False
 
 # Environment flags for Windows compatibility & MediaPipe Protobuf
 os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")

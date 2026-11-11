@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cổng Bác Sĩ (Mô Phỏng Demo) — AI Care Assistant</title>
+  <title>Cổng Bác Sĩ — AI Care Assistant</title>
   <style>
     :root {
       --primary: #1B63CC;
@@ -459,6 +459,11 @@
     .btn-chat-send:hover { background: #3730A3; }
 
     /* Prescription Revocation & Custom Med Box */
+    .btn.btn-secondary {
+      background: #EEF2FF; color: #3730A3; border: 1px solid #C7D2FE; border-radius: 6px;
+      padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .btn.btn-secondary:hover { background: #E0E7FF; }
     .btn-cancel-rx {
       background: #FEE2E2;
       color: #DC2626;
@@ -884,7 +889,7 @@
       <!-- 4. RECOMMENDATIONS TAB -->
       <div id="tab-recs" class="tab-content">
         <div class="card">
-          <div class="card-title">Gửi lời khuyên chuyên môn cá nhân hóa (Dữ liệu mô phỏng demo)</div>
+          <div class="card-title">Gửi lời khuyên chuyên môn cá nhân hóa</div>
           <div class="disclaimer-box">
             Lời khuyên được gắn phiên bản, tên người soạn và danh mục (Dinh dưỡng / Vận động / Tinh thần). Người nhà và người già sẽ nhận thông báo trên cổng thông tin.
           </div>
@@ -908,7 +913,8 @@
               <label class="form-label">Nội dung chi tiết</label>
               <textarea id="recContent" class="form-control" rows="3" placeholder="Bác sĩ khuyên cụ duy trì thói quen đi bộ nhẹ nhàng..." required></textarea>
             </div>
-            <button type="submit" class="btn-submit" style="background: #4338CA;">Gửi lời khuyên đến bệnh nhân</button>
+            <button type="submit" id="recSubmitBtn" class="btn-submit" style="background: #4338CA;">Gửi lời khuyên đến bệnh nhân</button>
+            <button type="button" id="recCancelEditBtn" class="btn btn-secondary" style="display: none; margin-left: 8px;" onclick="setRecEditing(null)">Hủy sửa</button>
           </form>
         </div>
 
@@ -1027,6 +1033,46 @@
       }
     }
 
+    // Server timestamps are UTC (ISO with Z / +00:00). Show them on the patient's clock (Vietnam time).
+    // Strings without a timezone are wall-clock values typed by a person and are shown unchanged.
+    function vnParts(iso) {
+      const s = String(iso || "");
+      if (!s) return null;
+      if (!/(Z|[+-]\d{2}:?\d{2})$/.test(s)) {
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+        return m ? { y: m[1], mo: m[2], d: m[3], h: m[4] || "00", mi: m[5] || "00", s: m[6] || "00" } : null;
+      }
+      const dt = new Date(s);
+      if (isNaN(dt)) return null;
+      const p = {};
+      new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Ho_Chi_Minh", hourCycle: "h23", year: "numeric", month: "2-digit",
+        day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(dt).forEach(x => { p[x.type] = x.value; });
+      return { y: p.year, mo: p.month, d: p.day, h: p.hour, mi: p.minute, s: p.second };
+    }
+    function vnDate(iso) { const p = vnParts(iso); return p ? `${p.y}-${p.mo}-${p.d}` : "--"; }
+    function vnTime(iso) { const p = vnParts(iso); return p ? `${p.h}:${p.mi}` : "--"; }
+    function vnDateTime(iso, withSeconds) {
+      const p = vnParts(iso);
+      return p ? `${p.y}-${p.mo}-${p.d} ${p.h}:${p.mi}${withSeconds ? ":" + p.s : ""}` : "--";
+    }
+    function esc(v) {
+      return String(v ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+    }
+    // "500" + "mg" -> "500 mg"; a strength already typed with its unit ("500 mg") is not given a second one.
+    function strengthText(it) {
+      const s = String(it.product_strength ?? "").trim();
+      if (!s) return "";
+      const u = String(it.strength_unit || "mg").trim();
+      return /[^0-9.,\s]/.test(s) ? s : `${s} ${u}`;
+    }
+    function doseTimesText(it) {
+      return (it.local_times && it.local_times.length) ? it.local_times.join(", ") : "";
+    }
+    function localNowInput() {
+      const now = new Date();
+      return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    }
+
     async function apiCall(endpoint, method = "GET", body = null) {
       const headers = { "Content-Type": "application/json" };
       if (currentToken) headers["Authorization"] = `Bearer ${currentToken}`;
@@ -1037,7 +1083,12 @@
         window.location.href = "/login";
         return null;
       }
-      return await res.json();
+      try {
+        return await res.json();
+      } catch (e) {
+        // 502/504 from the host while the server restarts, or an empty body: report it instead of crashing the page
+        return { error: `Máy chủ chưa phản hồi (mã ${res.status}). Vui lòng thử lại sau ít phút.` };
+      }
     }
 
     async function init() {
@@ -1050,14 +1101,15 @@
         window.location.href = "/login";
         return;
       }
-      document.getElementById("docNameLbl").innerText = `${meData.user.full_name} (Mô phỏng Demo)`;
+      const isDemoDoctor = !!(meData.clinician && meData.clinician.is_simulation);
+      document.getElementById("docNameLbl").innerText = meData.user.full_name + (isDemoDoctor ? " (Mô phỏng Demo)" : "");
 
       await loadPatientsList();
       await loadMedicationsCatalog();
 
       const startDateInput = document.getElementById("newRxStartDate");
       if (startDateInput && !startDateInput.value) {
-        startDateInput.value = new Date().toISOString().slice(0, 10);
+        startDateInput.value = localNowInput().slice(0, 10);
       }
     }
 
@@ -1179,11 +1231,17 @@
       heading.textContent = 'Yêu cầu giọng nói'; box.appendChild(heading);
       const requestLabels = {open:'Chờ tiếp nhận',acknowledged:'Đã tiếp nhận',resolved:'Đã giải quyết',cancelled:'Đã hủy/đính chính'};
       const deliveryLabels = {queued:'Chờ gửi',sent:'Máy chủ thư đã chấp nhận',failed:'Chưa gửi được',unknown:'Chưa rõ kết quả gửi',cancelled:'Đã hủy giao tin'};
+      if (!data || !data.requests || data.requests.length === 0) {
+        const empty = document.createElement('p');
+        empty.style.color = 'var(--muted)';
+        empty.textContent = 'Chưa có yêu cầu nào gửi bằng giọng nói từ người cao tuổi.';
+        box.appendChild(empty);
+      }
       for (const request of ((data && data.requests) || [])) {
         const row = document.createElement('div');
         row.style.padding = '10px';
         const text = document.createElement('p');
-        text.textContent = `${request.created_at} — ${request.original_text} — ${requestLabels[request.status] || request.status} (giao tin: ${deliveryLabels[request.delivery_status] || request.delivery_status})`;
+        text.textContent = `${vnDateTime(request.created_at)} — ${request.original_text} — ${requestLabels[request.status] || request.status} (giao tin: ${deliveryLabels[request.delivery_status] || request.delivery_status})`;
         row.appendChild(text);
         for (const [target, label] of [['acknowledged','Tiếp nhận'],['resolved','Đã giải quyết']]) {
           if ((target === 'acknowledged' && request.status !== 'open') || (target === 'resolved' && request.status !== 'acknowledged')) continue;
@@ -1214,7 +1272,7 @@
       if (!data) return;
       if (data.latest_blood_pressure) {
         document.getElementById("docBpVal").innerText = `${data.latest_blood_pressure.systolic}/${data.latest_blood_pressure.diastolic}`;
-        document.getElementById("docBpSub").innerText = `${data.latest_blood_pressure.measured_at.slice(11, 16)} (${data.latest_blood_pressure.device_label || 'Thủ công'})`;
+        document.getElementById("docBpSub").innerText = `${vnTime(data.latest_blood_pressure.measured_at)} (${data.latest_blood_pressure.device_label || 'Thủ công'})`;
       } else {
         document.getElementById("docBpVal").innerText = "-- / --";
         document.getElementById("docBpSub").innerText = "Chưa có số đo mới";
@@ -1222,7 +1280,7 @@
 
       if (data.latest_heart_rate) {
         document.getElementById("docHrVal").innerText = `${data.latest_heart_rate.value_numeric} bpm`;
-        document.getElementById("docHrSub").innerText = `Đo lúc ${data.latest_heart_rate.measured_at.slice(11, 16)} (${data.latest_heart_rate.device_label || 'Thủ công'})`;
+        document.getElementById("docHrSub").innerText = `Đo lúc ${vnTime(data.latest_heart_rate.measured_at)} (${data.latest_heart_rate.device_label || 'Thủ công'})`;
       } else {
         document.getElementById("docHrVal").innerText = "-- bpm";
         document.getElementById("docHrSub").innerText = "Chưa có số đo mới";
@@ -1231,7 +1289,7 @@
       if (data.latest_blood_glucose) {
         let gluVal = data.latest_blood_glucose.value_numeric;
         let gluUnit = data.latest_blood_glucose.unit_code;
-        let subTxt = `Đo lúc ${data.latest_blood_glucose.measured_at.slice(11, 16)}`;
+        let subTxt = `Đo lúc ${vnTime(data.latest_blood_glucose.measured_at)}`;
         if (gluUnit === 'mmol/L') {
           subTxt += ` (~${Math.round(gluVal * 18.0)} mg/dL)`;
         }
@@ -1244,7 +1302,7 @@
 
       if (data.latest_spo2) {
         document.getElementById("docSpo2Val").innerText = `${data.latest_spo2.value_numeric}%`;
-        document.getElementById("docSpo2Sub").innerText = `Đo lúc ${data.latest_spo2.measured_at.slice(11, 16)} (${data.latest_spo2.device_label || 'Thủ công'})`;
+        document.getElementById("docSpo2Sub").innerText = `Đo lúc ${vnTime(data.latest_spo2.measured_at)} (${data.latest_spo2.device_label || 'Thủ công'})`;
       } else {
         document.getElementById("docSpo2Val").innerText = "-- %";
         document.getElementById("docSpo2Sub").innerText = "Chưa có số đo mới";
@@ -1325,7 +1383,7 @@
         <div class="summary-chip">
           <div class="chip-label">Số đo gần nhất</div>
           <div class="chip-val" style="color: ${statusColor};">${latest.systolic}/${latest.diastolic} <span style="font-size: 13px; font-weight: 500;">mmHg</span></div>
-          <div class="chip-sub">${statusText} | Lúc ${latest.measured_at.slice(11, 16)} (${latest.device_label || 'Thủ công'})</div>
+          <div class="chip-sub">${statusText} | Lúc ${vnTime(latest.measured_at)} (${latest.device_label || 'Thủ công'})</div>
         </div>
         <div class="summary-chip">
           <div class="chip-label">Chế độ hiển thị</div>
@@ -1379,7 +1437,7 @@
       readings.forEach(r => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td>${r.measured_at.replace("T", " ").slice(0, 19)}</td>
+          <td>${vnDateTime(r.measured_at, true)}</td>
           <td><strong style="color: #dc2626;">${r.systolic || '--'}</strong></td>
           <td><strong style="color: #2563eb;">${r.diastolic || '--'}</strong></td>
           <td>${r.unit_code}</td>
@@ -1525,9 +1583,9 @@
           svg += `<line x1="${x}" y1="${ySys}" x2="${x}" y2="${yDia}" stroke="#cbd5e1" stroke-width="1.8" stroke-dasharray="2,2" />`;
         }
 
-        const dateStr = isDayMode ? it.date : it.measured_at.slice(0, 19).replace('T', ' ');
+        const dateStr = isDayMode ? it.date : vnDateTime(it.measured_at, true);
         const tDate = isDayMode ? it.date.slice(5).replace('-', '/') : it.measured_at.slice(5, 10).replace('-', '/');
-        const tTime = isDayMode ? `n=${it.n}` : it.measured_at.slice(11, 16);
+        const tTime = isDayMode ? `n=${it.n}` : vnTime(it.measured_at);
         const dotR = isDayMode ? Math.min(9, 5 + (it.n || 1)) : 6;
         const tipData = `data-date="${dateStr}" data-sys="${sysVal || '--'}" data-dia="${diaVal || '--'}" data-note="${isDayMode ? `Tổng hợp ngày (Số mẫu n=${it.n})` : (it.device_label || 'Thủ công')}"`;
 
@@ -1681,9 +1739,9 @@
         const val = isDayMode ? it.mean_value : (it.standard_value ?? it.value_numeric);
         const y = getY(val);
 
-        const dateStr = isDayMode ? it.date : it.measured_at.slice(0, 19).replace('T', ' ');
+        const dateStr = isDayMode ? it.date : vnDateTime(it.measured_at, true);
         const tDate = isDayMode ? it.date.slice(5).replace('-', '/') : it.measured_at.slice(5, 10).replace('-', '/');
-        const tTime = isDayMode ? `n=${it.n}` : it.measured_at.slice(11, 16);
+        const tTime = isDayMode ? `n=${it.n}` : vnTime(it.measured_at);
         const dotR = isDayMode ? Math.min(10, 5 + (it.n || 1)) : 6;
 
         let evalText = "Bình thường";
@@ -1761,7 +1819,7 @@
         <div class="summary-chip">
           <div class="chip-label">Số đo gần nhất</div>
           <div class="chip-val" style="color: ${statusColor};">${latestDisplay}</div>
-          <div class="chip-sub">${statusText} | Lúc ${latest.measured_at.slice(11, 16)}</div>
+          <div class="chip-sub">${statusText} | Lúc ${vnTime(latest.measured_at)}</div>
         </div>
         <div class="summary-chip">
           <div class="chip-label">Chế độ hiển thị</div>
@@ -1838,7 +1896,7 @@
 
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td>${r.measured_at.replace("T", " ").slice(0, 19)}</td>
+          <td>${vnDateTime(r.measured_at, true)}</td>
           <td><strong>${origText}</strong></td>
           <td>${meta.unit}</td>
           <td><span class="badge ${badgeClass}">${evalText}</span></td>
@@ -1967,7 +2025,8 @@
         (p.items || []).forEach(it => {
           itemsHtml += `
             <div style="background: var(--bg); padding: 8px 12px; border-radius: 6px; margin-top: 6px; font-size: 13.5px;">
-              <strong>💊 ${it.brand_name} (${it.product_strength} ${it.strength_unit}):</strong> Liều dùng ${it.dose_amount} ${it.dose_unit} — ${it.original_instructions}
+              <strong>💊 ${esc(it.brand_name)}${strengthText(it) ? ` (${esc(strengthText(it))})` : ''}:</strong> Liều dùng ${it.dose_amount} ${esc(it.dose_unit)} — ${esc(it.original_instructions)}
+              <div style="margin-top: 4px; color: #4338CA; font-weight: 600;">⏰ Giờ uống: ${esc(doseTimesText(it) || 'chưa đặt giờ')}</div>
             </div>
           `;
         });
@@ -2214,7 +2273,7 @@
       data.reports.forEach(r => {
         const opt = document.createElement("option");
         opt.value = r.report_id;
-        opt.innerText = `Báo cáo lúc ${r.created_at.slice(11, 16)} (${r.severity}): ${r.description.slice(0, 35)}...`;
+        opt.innerText = `Báo cáo lúc ${vnTime(r.created_at)} (${r.severity}): ${r.description.slice(0, 35)}...`;
         targetSelect.appendChild(opt);
       });
 
@@ -2229,13 +2288,13 @@
                 👤 ${r.caregiver_name || 'Người nhà'}
                 <span class="chat-severity-tag chat-severity-${r.severity}">Mức độ: ${r.severity}</span>
               </span>
-              <span class="time">${r.created_at.replace("T", " ").slice(0, 16)}</span>
+              <span class="time">${vnDateTime(r.created_at)}</span>
             </div>
             <div style="margin-top: 6px; font-weight: 500;">
               ${r.description}
             </div>
             <div style="font-size: 11.5px; color: var(--muted); margin-top: 6px;">
-              ⏱️ Quan sát từ lúc: ${r.observed_at.replace("T", " ").slice(0, 16)} | Trạng thái: <strong>${r.status}</strong>
+              ⏱️ Quan sát từ lúc: ${vnDateTime(r.observed_at)} | Trạng thái: <strong>${r.status}</strong>
             </div>
 
             <!-- Doctor Replies Thread -->
@@ -2245,7 +2304,7 @@
                   <div class="chat-reply-item">
                     <div style="display: flex; justify-content: space-between; font-weight: 700; color: #4338CA; font-size: 12px; margin-bottom: 3px;">
                       <span>👨‍⚕️ ${m.sender_name || 'Bác sĩ phụ trách'}:</span>
-                      <span style="font-weight: normal; color: var(--muted);">${m.created_at.slice(11, 16)}</span>
+                      <span style="font-weight: normal; color: var(--muted);">${vnTime(m.created_at)}</span>
                     </div>
                     <div>${m.body}</div>
                   </div>
@@ -2319,7 +2378,43 @@
     }
 
     /* CARE RECOMMENDATIONS */
+    const recCategoryLabels = { nutrition: "Dinh dưỡng", exercise: "Vận động", mental: "Tinh thần", general: "Chăm sóc chung" };
+    let recsById = {};
+    let editingRecId = null;
+
+    function setRecEditing(rec) {
+      editingRecId = rec ? rec.recommendation_id : null;
+      const btn = document.getElementById("recSubmitBtn");
+      const cancel = document.getElementById("recCancelEditBtn");
+      if (btn) btn.innerText = rec ? `Lưu bản sửa (v${rec.version + 1})` : "Gửi lời khuyên đến bệnh nhân";
+      if (cancel) cancel.style.display = rec ? "inline-block" : "none";
+      document.getElementById("recCategory").value = rec ? rec.category : "nutrition";
+      document.getElementById("recTitle").value = rec ? rec.title : "";
+      document.getElementById("recContent").value = rec ? rec.content : "";
+    }
+
+    function editRecommendation(recId) {
+      const rec = recsById[recId];
+      if (!rec) return;
+      setRecEditing(rec);
+      document.getElementById("recTitle").focus();
+      document.getElementById("recTitle").scrollIntoView({ block: "center" });
+    }
+
+    async function revokeRecommendation(recId) {
+      const rec = recsById[recId];
+      if (!confirm(`Thu hồi lời khuyên "${rec ? rec.title : recId}"? Người nhà và người cao tuổi sẽ không còn thấy lời khuyên này.`)) return;
+      const res = await apiCall(`/api/patients/${currentPatientId}/recommendations/${recId}/revoke`, "POST", {});
+      if (res && res.status === "REVOKED") {
+        if (editingRecId === recId) setRecEditing(null);
+        loadRecommendations();
+      } else {
+        alert((res && res.error) || "Không thu hồi được lời khuyên.");
+      }
+    }
+
     async function loadRecommendations() {
+      recsById = {};
       const data = await apiCall(`/api/patients/${currentPatientId}/recommendations`);
       const container = document.getElementById("recsListContainer");
       if (!data || !data.recommendations || data.recommendations.length === 0) {
@@ -2328,14 +2423,21 @@
       }
       let html = "";
       data.recommendations.forEach(rec => {
+        recsById[rec.recommendation_id] = rec;
         html += `
           <div style="border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 10px; background: #ffffff;">
-            <div style="display: flex; justify-content: space-between;">
-              <strong style="color: var(--navy); font-size: 15px;">${rec.title} [${rec.category.toUpperCase()}]</strong>
-              <span class="badge badge-primary">Phiên bản v${rec.version} (Demo)</span>
+            <div style="display: flex; justify-content: space-between; gap: 8px;">
+              <strong style="color: var(--navy); font-size: 15px;">${esc(rec.title)} [${esc(recCategoryLabels[rec.category] || rec.category)}]</strong>
+              <span class="badge badge-primary">Phiên bản v${rec.version}${rec.is_simulation ? ' (Demo)' : ''}</span>
             </div>
-            <p style="font-size: 14px; margin: 6px 0;">${rec.content}</p>
-            <div style="font-size: 12px; color: var(--muted);">BS soạn: ${rec.author_name} (${rec.created_at.slice(0, 10)})</div>
+            <p style="font-size: 14px; margin: 6px 0; white-space: pre-wrap;">${esc(rec.content)}</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <div style="font-size: 12px; color: var(--muted);">BS soạn: ${esc(rec.author_name)} (${vnDate(rec.created_at)})</div>
+              <div style="display: flex; gap: 6px;">
+                <button type="button" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12.5px;" onclick="editRecommendation('${rec.recommendation_id}')">✏️ Sửa</button>
+                <button type="button" class="btn-cancel-rx" onclick="revokeRecommendation('${rec.recommendation_id}')">🗑️ Thu hồi</button>
+              </div>
+            </div>
           </div>
         `;
       });
@@ -2347,10 +2449,16 @@
       const cat = document.getElementById("recCategory").value;
       const title = document.getElementById("recTitle").value;
       const content = document.getElementById("recContent").value;
-      await apiCall(`/api/patients/${currentPatientId}/recommendations`, "POST", { category: cat, title, content });
-      document.getElementById("recTitle").value = "";
-      document.getElementById("recContent").value = "";
-      alert("Đã lưu lời khuyên chuyên môn thành công!");
+      const res = editingRecId
+        ? await apiCall(`/api/patients/${currentPatientId}/recommendations/${editingRecId}`, "PUT", { category: cat, title, content })
+        : await apiCall(`/api/patients/${currentPatientId}/recommendations`, "POST", { category: cat, title, content });
+      if (!res || !res.recommendation_id) {
+        alert((res && res.error) || "Không lưu được lời khuyên. Vui lòng thử lại.");
+        return;
+      }
+      const wasEdit = !!editingRecId;
+      setRecEditing(null);
+      alert(wasEdit ? `Đã cập nhật lời khuyên lên phiên bản v${res.version}.` : "Đã lưu lời khuyên chuyên môn thành công!");
       loadRecommendations();
     }
 

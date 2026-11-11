@@ -29,7 +29,13 @@ import os
 import secrets
 import signal
 import sys
+import time
 from pathlib import Path
+
+# Cloud hosts run in UTC. "Today", duty hours and dose days must follow the patients' clock, like the home app.
+os.environ.setdefault("TZ", "Asia/Ho_Chi_Minh")
+if hasattr(time, "tzset"):
+    time.tzset()
 
 ROOT = Path(__file__).resolve().parents[2]
 os.environ.setdefault("AI_CARE_HOME", str(ROOT / "runtime"))

@@ -12,6 +12,28 @@ MAX_AUDIO_BYTES = 50 * 1024 * 1024
 AUDIO_TYPES = {'.mp3': ('audio/mpeg', 'mp3'), '.wav': ('audio/wav', 'wav')}
 
 
+
+_MP3_BITRATES = (0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0)
+
+
+def _duration_without_av(extension, data):
+    """Seconds of audio, checked without PyAV: WAV through the wave module, MP3 from its first frame header."""
+    if extension == '.wav':
+        import wave
+        with wave.open(io.BytesIO(data)) as w:
+            if w.getnframes() <= 0 or w.getframerate() <= 0:
+                raise ValueError('Không có dữ liệu âm thanh')
+            return w.getnframes() / float(w.getframerate())
+    start = 0
+    if data[:3] == b'ID3' and len(data) > 10:
+        start = 10 + ((data[6] & 0x7F) << 21 | (data[7] & 0x7F) << 14 | (data[8] & 0x7F) << 7 | (data[9] & 0x7F))
+    for i in range(start, min(len(data) - 3, start + 65536)):
+        if data[i] == 0xFF and (data[i + 1] & 0xE0) == 0xE0 and (data[i + 1] & 0x06) != 0:
+            kbps = _MP3_BITRATES[data[i + 2] >> 4]
+            if kbps:
+                return max(1.0, (len(data) - i) * 8 / (kbps * 1000.0))
+    raise ValueError('Không tìm thấy khung âm thanh MP3')
+
 class FamilyMusicService:
     def __init__(self, db, media_dir=None):
         self.db = db
@@ -67,17 +89,23 @@ class FamilyMusicService:
             raise ValueError('Vui lòng nhập tên bài nhạc')
         # Validate the container and decode an audio frame, not just its suffix.
         try:
-            import av
-            with av.open(io.BytesIO(data)) as container:
-                if AUDIO_TYPES[extension][1] not in container.format.name.split(','):
-                    raise ValueError('Sai định dạng âm thanh')
-                stream = next(s for s in container.streams if s.type == 'audio')
-                frame = next(container.decode(stream))
-                if frame.samples <= 0:
-                    raise ValueError('Không có dữ liệu âm thanh')
-                duration = float(stream.duration * stream.time_base) if stream.duration is not None else float(container.duration or 0) / av.time_base
-                if not math.isfinite(duration) or duration <= 0:
-                    raise ValueError('Không xác định được thời lượng âm thanh')
+            try:
+                import av
+            except ImportError:  # cloud backend without PyAV: check the file with the standard library
+                av = None
+            if av is None:
+                duration = _duration_without_av(extension, data)
+            else:
+                with av.open(io.BytesIO(data)) as container:
+                    if AUDIO_TYPES[extension][1] not in container.format.name.split(','):
+                        raise ValueError('Sai định dạng âm thanh')
+                    stream = next(s for s in container.streams if s.type == 'audio')
+                    frame = next(container.decode(stream))
+                    if frame.samples <= 0:
+                        raise ValueError('Không có dữ liệu âm thanh')
+                    duration = float(stream.duration * stream.time_base) if stream.duration is not None else float(container.duration or 0) / av.time_base
+                    if not math.isfinite(duration) or duration <= 0:
+                        raise ValueError('Không xác định được thời lượng âm thanh')
         except Exception as exc:
             raise ValueError('Tệp không phải âm thanh MP3/WAV hợp lệ hoặc đã bị hỏng') from exc
         digest = hashlib.sha256(data).hexdigest()
